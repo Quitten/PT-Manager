@@ -27,6 +27,7 @@ Project Settings Tab:
 
 
 Vulnerability Tab:
+
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/vulnerability.png)
 
 1. Open the Vulnerability tab, and create a new vulnerability.
@@ -34,6 +35,8 @@ Vulnerability Tab:
 3. "Add SS from clipboard" button will copy image that you captured and save in your clipboard, it is also possible to add it manually by pasting jpg file into the vulnerability folder.
 4. it is possbile to right click the on the selected preview image in order to copy the file into the clipboard in case you would like to get speicific image
 5. request and response tab will include the requset and response of the vulnerable requset. it is possible to attach specific request and response to a vulnerability by right click on request/response from anywhere in burp then click on "Send to PT Manager" 
+
+
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/send%20to.png)
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/select.png)
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/request.png)
