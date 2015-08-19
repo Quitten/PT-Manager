@@ -1,4 +1,4 @@
-# PT-Manager
+# PT Vulnerabilities Manager
 Penetration test vulnerabilities manager extension for Burp Suite written in Jython developed by Barak Tawily in order to ease application security people manage vulnerabilities
 
 
@@ -16,6 +16,7 @@ Penetration test vulnerabilities manager extension for Burp Suite written in Jyt
 After installation, the PT Manager tab will be added to Burp.
 
 Project Settings Tab:
+
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/project_settings.png)
 
 1.	Open the Project Settings tab (PT Manager -> Project Settings) and create a new project, make sure you are creating it under encrypted partition.
