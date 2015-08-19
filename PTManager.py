@@ -1131,3 +1131,4 @@ class handleMenuItems(ActionListener):
 
         self._extender.saveRequestResponse('request',self._messageInfo.getRequest(),selectedVuln)
         self._extender.saveRequestResponse('response',self._messageInfo.getResponse(),selectedVuln)
+        self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
