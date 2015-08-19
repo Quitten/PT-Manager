@@ -883,7 +883,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
     def getValueAt(self, rowIndex, columnIndex):
         vulnObject = self._log.get(rowIndex)
         if columnIndex == 0:
-            return rowIndex
+            return rowIndex+1
         if columnIndex == 1:
             return vulnObject.getName()
         if columnIndex == 2:
