@@ -95,7 +95,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         if self.projPath.getText() != None:
             self.loadVulnerabilities(self.projPath.getText())
-        
 
         print "Thank you for installing PT Vulnerabilities Manager v1.0 extension"
         print "by Barak Tawily\n\n\n"
@@ -215,6 +214,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         self.projName = JTextField("")
         self.projName.setBounds(140, 50, 270, 30)
+        self.projName.getDocument().addDocumentListener(projTextChanged(self))
 
         detailsLabel = JLabel("Details:")
         detailsLabel.setBounds(10, 120, 140, 30)
@@ -271,8 +271,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         addProjButton.setBounds(10, 330, 150, 30)
 
         openProjButton = JButton("Open Project Directory",actionPerformed=self.openProj)
-        openProjButton.setBounds(260, 330, 150, 30)
+        openProjButton.setBounds(640, 10, 150, 30)
 
+        removeProjButton = JButton("Remove Current Project",actionPerformed=self.rmProj)
+        removeProjButton.setBounds(260, 330, 150, 30)
 
         generalOptions = self.config.options('general')
         if 'default project' in generalOptions:
@@ -280,6 +282,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.currentProject.setSelectedItem(defaultProj)
             self.projPath.setText(self.config.get('projects',self.currentProject.getSelectedItem()))
 
+        self.clearProjTab = True
         self.projectSettings = JPanel()
         self.projectSettings.setBounds(0, 0, 1000, 1000)
         self.projectSettings.setLayout(None)
@@ -293,6 +296,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.projectSettings.add(projDetailsScroll)
         self.projectSettings.add(importProjButton)
         self.projectSettings.add(exportProjButton)
+        self.projectSettings.add(removeProjButton)
         self.projectSettings.add(generateReportButton)
         self.projectSettings.add(chooseProjPathButton)
         self.projectSettings.add(currentProjectLabel)
@@ -358,10 +362,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
 
     def loadVulnerabilities(self, projPath):
-        self.clearList(self)
+        self.clearList(None)
         selected = False
         for root, dirs, files in os.walk(projPath): # make it go only for dirs
-
             for dirName in dirs:
                 xmlPath = projPath+"\\"+dirName+"\\vulnerability.xml"
                 xmlPath = xmlPath.replace("\\","\\\\")
@@ -384,7 +387,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                     self.logTable.setRowSelectionInterval(row,row)
                     selected = True
         if selected == False and self._log.size() > 0:
-            # print "here"
             self.logTable.setRowSelectionInterval(0, 0)
             self.loadVulnerability(self._log.get(0))
         
@@ -419,7 +421,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         if returnVal == JFileChooser.APPROVE_OPTION:
             dst = str(chooser.getSelectedFile())
             shutil.make_archive(dst,"zip",self.getCurrentProjPath())
-            JOptionPane.showMessageDialog(None,"Project export successfuly")
+            self.popup("Project export successfuly")
 
     def importProj(self,event):
         chooser = JFileChooser()
@@ -453,14 +455,13 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
                 self.config.set('projects', projName, projPath)
                 self.saveCfg()
-                projects = self.config.options('projects')
-                self.currentProject.setModel(DefaultComboBoxModel(projects))
+                self.reloadProjects()
                 self.currentProject.setSelectedItem(projName)
                 self.clearVulnerabilityTab() 
 
     def reportToXLS(self):
         if not xlsxwriterImported:
-            JOptionPane.showMessageDialog(None,"xlsxwriter library is not imported")
+            self.popup("xlsxwriter library is not imported")
             return
         workbook = xlsxwriter.Workbook(self.getCurrentProjPath() + '\\PT Manager Report.xlsx')
         worksheet = workbook.add_worksheet()
@@ -544,13 +545,13 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             name = self._log.get(i).getName()
             request = "None"
             response = "None"
-            path = self.getCurrentProjPath() + "\\" + self.clearStr(name) + "\\request_" + self.clearStr(name)
+            path = self.getVulnReqResPath("request",name)
             if os.path.exists(path):
-                request = self.newlineToBR(open(path, "rb").read())
+                request = self.newlineToBR(self.getFileContent(path))
                 
-            path = self.getCurrentProjPath() + "\\" + self.clearStr(name) + "\\response_" + self.clearStr(name)
+            path = self.getVulnReqResPath("response",name)
             if os.path.exists(path):
-                response = self.newlineToBR(open(path, "rb").read())
+                response = self.newlineToBR(self.getFileContent(path))
             images = ""
             for fileName in os.listdir(self.projPath.getText()+"\\"+self.clearStr(name)):
                 if fileName.endswith(".jpg"):
@@ -566,6 +567,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def newlineToBR(self,string):
         return "<br />".join(string.split("\n"))
+
+    def getFileContent(self,path):
+        f = open(path, "rb")
+        content = f.read()
+        f.close()
+        return content
 
     def convertVulntoTable(self, number, name, severity, description, mitigation, request = "None", response = "None", images = "None"):
         return """<div style="width: 100%%;height: 30px;text-align: center;background-color:#E0E0E0;font-size: 17px;font-weight: bold;color: #000;padding-top: 10px;">%s <a href="javascript:divHideShow('Table_%s');" style="color:#191970">(OPEN / CLOSE)</a></div>
@@ -657,16 +664,16 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.firstPic.setIcon(None)
 
     def saveRequestResponse(self, type, requestResponse, vulnName):
-        if type == 'request':
-            path = self.getCurrentProjPath() + "\\" + self.clearStr(vulnName) + "\\request_" + self.clearStr(vulnName)
-        else:
-            path = self.getCurrentProjPath() + "\\" + self.clearStr(vulnName) + "\\response_" + self.clearStr(vulnName)
+        path = self.getVulnReqResPath(type,vulnName)
         f = open(path, 'wb')
         f.write(requestResponse)
         f.close()
 
     def openProj(self, event):
         os.system('explorer ' + self.projPath.getText())
+
+    def getVulnReqResPath(self, requestOrResponse, vulnName):
+        return self.getCurrentProjPath() + "\\" + self.clearStr(vulnName) + "\\"+requestOrResponse+"_" + self.clearStr(vulnName)
 
     def chooseProjPath(self, event):
         chooser = JFileChooser()
@@ -678,8 +685,27 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             os.makedirs(projPath)
             self.projPath.setText(projPath)
 
+    def reloadProjects(self):
+        self.currentProject.setModel(DefaultComboBoxModel(self.config.options('projects')))
+
+    def rmProj(self, event):
+        if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
+            self._requestViewer.setMessage("None", False)
+            self._responseViewer.setMessage("None", False)
+            shutil.rmtree(self.projPath.getText())
+            self.config.remove_option('projects',self.currentProject.getSelectedItem())
+            self.reloadProjects()
+            self.currentProject.setSelectedIndex(0)
+            self.loadVulnerabilities(self.projPath.getText())
+
+    def popup(self,msg):
+        JOptionPane.showMessageDialog(None,msg)
+
     def addProj(self, event):
         projPath = self.projPath.getText()
+        if projPath == None or projPath == "":
+            self.popup("Please select path")
+            return
         self.config.set('projects', self.projName.getText(), projPath)
         self.saveCfg()
         xml = ET.Element('project')
@@ -693,12 +719,16 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         details.text = self.projDetails.getText()
         autoSaveMode.text = str(self.autoSave.isSelected())
         tree = ET.ElementTree(xml)
-        tree.write(self.getCurrentProjPath()+'\\project.xml')
+        try:
+            tree.write(self.getCurrentProjPath()+'\\project.xml')
+        except:
+            self.popup("Invalid path")
+            return
 
-        projects = self.config.options('projects')
-        self.currentProject.setModel(DefaultComboBoxModel(projects))
+        self.reloadProjects()
         self.currentProject.setSelectedItem(self.projName.getText())
         self.clearVulnerabilityTab()
+        self.clearList(None)
 
     def resize(self, image, width, height):
         bi = BufferedImage(width, height, BufferedImage.TRANSLUCENT)
@@ -711,10 +741,14 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
     def clearStr(self, var):
         return var.replace(" " , "_").replace("\\" , "").replace("/" , "").replace(":" , "").replace("*" , "").replace("?" , "").replace("\"" , "").replace("<" , "").replace(">" , "").replace("|" , "").replace("(" , "").replace(")" , "")
 
+    def popUpAreYouSure(self):
+        dialogResult = JOptionPane.showConfirmDialog(None,"Are you sure?","Warning",JOptionPane.YES_NO_OPTION)
+        if dialogResult == 0:
+            return 0
+        return 1
 
     def removeSS(self,event):
-        dialogResult = JOptionPane.showConfirmDialog(None,"Are you sure?","Warning",JOptionPane.YES_NO_OPTION)
-        if dialogResult == JOptionPane.YES_OPTION:
+        if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
             os.remove(self.getCurrentVulnPath() + "\\" + self.ssList.getSelectedValue())
             self.ssList.getModel().remove(self.ssList.getSelectedIndex())
             self.firstPic.setIcon(ImageIcon(None))
@@ -725,7 +759,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         try:
             image = clipboard.getData(DataFlavor.imageFlavor)
         except:
-            JOptionPane.showMessageDialog(None,"Clipboard not contains image");
+            self.popup("Clipboard not contains image")
             return
         vulnPath = self.projPath.getText() + "\\" + self.clearStr(self.vulnName.getText())
         if not os.path.exists(vulnPath):
@@ -741,9 +775,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.ssList.setSelectedValue(name,True)
 
     def rmVuln(self, event):
-        dialogResult = JOptionPane.showConfirmDialog(None,"Are you sure?","Warning",JOptionPane.YES_NO_OPTION)
-        if dialogResult == JOptionPane.YES_OPTION:
+        if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
+            self._requestViewer.setMessage("None", False)
+            self._responseViewer.setMessage("None", False)
             shutil.rmtree(self.getCurrentVulnPath())
+            self.clearVulnerabilityTab()
             self.loadVulnerabilities(self.getCurrentProjPath())
 
     def addVuln(self, event):
@@ -830,6 +866,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.firstPic.setIcon(ImageIcon(self.resize(image,550, 400)))
             self.firstPic.setSize(550,400)
 
+    def clearProjectTab(self):
+        self.projPath.setText("")
+        self.projDetails.setText("")
+
     def clearList(self, event):
         self._lock.acquire()
         self._log = ArrayList()
@@ -902,7 +942,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         builder = factory.newDocumentBuilder()
         if xmlPath == "def":
             xmlPath = self.getCurrentVulnPath() + "\\vulnerability.xml"
-        # print xmlPath
         document = builder.parse(xmlPath)
         nodeList = document.getDocumentElement().getChildNodes()
         nodeList.item(fieldNumber).setTextContent(value)
@@ -938,16 +977,16 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         else:
             self.ssList.setSelectedIndex(0)
 
-        path = self.getCurrentVulnPath() + "\\request_" + self.clearStr(vulnObject.getName())
+        path = self.getVulnReqResPath("request",vulnObject.getName())
         if os.path.exists(path):
-            f = open(path, "rb").read()
+            f = self.getFileContent(path)
             self._requestViewer.setMessage(f, False)
         else:
             self._requestViewer.setMessage("None", False)
         
-        path = self.getCurrentVulnPath() + "\\response_" + self.clearStr(vulnObject.getName())
+        path = self.getVulnReqResPath("response",vulnObject.getName())
         if os.path.exists(path):
-            f = open(path, "rb").read()
+            f = self.getFileContent(path)
             self._responseViewer.setMessage(f, False)
         else:
             self._responseViewer.setMessage("None", False)
@@ -1057,6 +1096,26 @@ class vulnTextChanged(DocumentListener):
             self._extender.vulnNameChanged()
         return
 
+class projTextChanged(DocumentListener):
+    def __init__(self, extender):
+        self._extender = extender
+
+    def removeUpdate(self, e):
+        if len(inspect.stack()) == 1:
+            if self._extender.clearProjTab:
+                self._extender.clearProjectTab()
+                self._extender.clearProjTab = False
+        return
+        
+
+    def insertUpdate(self, e):
+        if len(inspect.stack()) == 1:
+            if self._extender.clearProjTab:
+                self._extender.clearProjectTab()
+                self._extender.clearProjTab = False
+        return
+
+
 class projectChangeHandler(ActionListener):
     def __init__(self, extender):
         self._extender = extender
@@ -1065,7 +1124,11 @@ class projectChangeHandler(ActionListener):
         xmlPath = self._extender.config.get('projects',self._extender.currentProject.getSelectedItem()) + "\\project.xml"
         factory = DocumentBuilderFactory.newInstance()
         builder = factory.newDocumentBuilder()
-        document = builder.parse(xmlPath)
+        try:
+            document = builder.parse(xmlPath)
+        except:
+            self._extender.popup("project.xml not found")
+            return
         nodeList = document.getDocumentElement().getChildNodes()
         projName = nodeList.item(0).getTextContent()
         path = nodeList.item(1).getTextContent()
@@ -1075,6 +1138,7 @@ class projectChangeHandler(ActionListener):
         else:
             autoSaveMode = False
         self._extender.projPath.setText(path)
+        self._extender.clearProjTab = True
         self._extender.projName.setText(projName)
         self._extender.projDetails.setText(details)
         self._extender.autoSave.setSelected(autoSaveMode)
@@ -1129,6 +1193,9 @@ class handleMenuItems(ActionListener):
                     vulns,
                     vulnName)
 
-        self._extender.saveRequestResponse('request',self._messageInfo.getRequest(),selectedVuln)
-        self._extender.saveRequestResponse('response',self._messageInfo.getResponse(),selectedVuln)
-        self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
+        if selectedVuln != None:
+            if self._messageInfo.getRequest() != None:
+                self._extender.saveRequestResponse('request',self._messageInfo.getRequest(),selectedVuln)
+            if self._messageInfo.getResponse() != None:
+                self._extender.saveRequestResponse('response',self._messageInfo.getResponse(),selectedVuln)
+            self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
