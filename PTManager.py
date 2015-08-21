@@ -78,7 +78,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self._lock = Lock()
         
         self.logTable = Table(self)
-        self.logTable.getColumnModel().getColumn(0).setMaxWidth(3)
+        self.logTable.getColumnModel().getColumn(0).setMaxWidth(35)
         self.logTable.getColumnModel().getColumn(1).setMinWidth(100)
 
         self._requestViewer = self._callbacks.createMessageEditor(self, False)
@@ -355,8 +355,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         selected = False
         for root, dirs, files in os.walk(projPath): # make it go only for dirs
             for dirName in dirs:
-                xmlPath = projPath+"\\"+dirName+"\\vulnerability.xml"
-                xmlPath = xmlPath.replace("\\","\\\\")
+                xmlPath = projPath+"/"+dirName+"/vulnerability.xml"
+                # xmlPath = xmlPath.replace("/","//")
                 document = self.getXMLDoc(xmlPath)
                 nodeList = document.getDocumentElement().getChildNodes()
                 vulnName = nodeList.item(0).getTextContent()
@@ -435,11 +435,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
             returnVal = self.chooser.showOpenDialog(None)
             if returnVal == JFileChooser.APPROVE_OPTION:
-                projPath = str(self.chooser.getSelectedFile()) + "\\PTManager"
+                projPath = str(self.chooser.getSelectedFile()) + "/PTManager"
                 with zipfile.ZipFile(zipPath, "r") as z:
                     z.extractall(projPath)
 
-                xmlPath = projPath + "\\project.xml"
+                xmlPath = projPath + "/project.xml"
                 document = self.getXMLDoc(xmlPath)
                 nodeList = document.getDocumentElement().getChildNodes()
                 projName = nodeList.item(0).getTextContent()
@@ -455,7 +455,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         if not xlsxwriterImported:
             self.popup("xlsxwriter library is not imported")
             return
-        workbook = xlsxwriter.Workbook(self.getCurrentProjPath() + '\\PT Manager Report.xlsx')
+        workbook = xlsxwriter.Workbook(self.getCurrentProjPath() + '/PT Manager Report.xlsx')
         worksheet = workbook.add_worksheet()
         bold = workbook.add_format({'bold': True})
         worksheet.write(0, 0, "Vulnerability Name", bold)
@@ -471,7 +471,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             row = row + 1
             # add requests and images as well
         workbook.close()
-        return self.getCurrentProjPath() + '\\PT Manager Report.xlsx'
+        return self.getCurrentProjPath() + '/PT Manager Report.xlsx'
         
     def reportToHTML(self):
         htmlContent = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
@@ -545,17 +545,17 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             if os.path.exists(path):
                 response = self.newlineToBR(self.getFileContent(path))
             images = ""
-            for fileName in os.listdir(self.projPath.getText()+"\\"+self.clearStr(name)):
+            for fileName in os.listdir(self.projPath.getText()+"/"+self.clearStr(name)):
                 if fileName.endswith(".jpg"):
-                    images += "%s<br><img src=\"%s\"><br><br>" % (fileName, self.projPath.getText()+"\\"+self.clearStr(name) + "\\" + fileName)
+                    images += "%s<br><img src=\"%s\"><br><br>" % (fileName, self.projPath.getText()+"/"+self.clearStr(name) + "/" + fileName)
             description = self.newlineToBR(self._log.get(i).getDescription())
             mitigation = self.newlineToBR(self._log.get(i).getMitigation())
             htmlContent +=  self.convertVulntoTable(i,name,self._log.get(i).getSeverity(), description,mitigation, request, response, images)
         htmlContent += "</div></body></html>"
-        f = open(self.getCurrentProjPath() + '\\PT Manager Report.html', 'w')
+        f = open(self.getCurrentProjPath() + '/PT Manager Report.html', 'w')
         f.writelines(htmlContent)
         f.close()
-        return self.getCurrentProjPath() + '\\PT Manager Report.html'
+        return self.getCurrentProjPath() + '/PT Manager Report.html'
 
     def newlineToBR(self,string):
         return "<br />".join(string.split("\n"))
@@ -665,14 +665,14 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         os.system('explorer ' + self.projPath.getText())
 
     def getVulnReqResPath(self, requestOrResponse, vulnName):
-        return self.getCurrentProjPath() + "\\" + self.clearStr(vulnName) + "\\"+requestOrResponse+"_" + self.clearStr(vulnName)
+        return self.getCurrentProjPath() + "/" + self.clearStr(vulnName) + "/"+requestOrResponse+"_" + self.clearStr(vulnName)
 
     def chooseProjPath(self, event):
         self.chooser.setDialogTitle("Select target directory")
         self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
         returnVal = self.chooser.showOpenDialog(None)
         if returnVal == JFileChooser.APPROVE_OPTION:
-            projPath = str(self.chooser.getSelectedFile()) + "\\PTManager"
+            projPath = str(self.chooser.getSelectedFile()) + "/PTManager"
             os.makedirs(projPath)
             self.projPath.setText(projPath)
 
@@ -711,7 +711,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         autoSaveMode.text = str(self.autoSave.isSelected())
         tree = ET.ElementTree(xml)
         try:
-            tree.write(self.getCurrentProjPath()+'\\project.xml')
+            tree.write(self.getCurrentProjPath()+'/project.xml')
         except:
             self.popup("Invalid path")
             return
@@ -740,10 +740,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def removeSS(self,event):
         if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
-            os.remove(self.getCurrentVulnPath() + "\\" + self.ssList.getSelectedValue())
+            os.remove(self.getCurrentVulnPath() + "/" + self.ssList.getSelectedValue())
             self.ssList.getModel().remove(self.ssList.getSelectedIndex())
             self.firstPic.setIcon(ImageIcon(None))
-            # can check if there is images and select the first one
+            # check if there is images and select the first one
+            # bug in linux
 
     def addSS(self,event):
         clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
@@ -752,11 +753,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         except:
             self.popup("Clipboard not contains image")
             return
-        vulnPath = self.projPath.getText() + "\\" + self.clearStr(self.vulnName.getText())
+        vulnPath = self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText())
         if not os.path.exists(vulnPath):
             os.makedirs(vulnPath)
         name = self.clearStr(self.vulnName.getText()) + str(random.randint(1, 99999))+".jpg"
-        fileName = self.projPath.getText()+"\\"+ self.clearStr(self.vulnName.getText()) + "\\" + name
+        fileName = self.projPath.getText()+"/"+ self.clearStr(self.vulnName.getText()) + "/" + name
         file = File(fileName)
         bufferedImage = BufferedImage(image.getWidth(None), image.getHeight(None), BufferedImage.TYPE_INT_RGB);
         g = bufferedImage.createGraphics();
@@ -785,7 +786,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.fireTableRowsInserted(row, row)
         self._lock.release()
 
-        vulnPath = self.projPath.getText() + "\\" + self.clearStr(self.vulnName.getText())
+        vulnPath = self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText())
         if not os.path.exists(vulnPath):
             os.makedirs(vulnPath)
 
@@ -801,7 +802,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         mitigation.text = self.mitigationStr.getText()
         color.text = colorTxt
         tree = ET.ElementTree(xml)
-        tree.write(vulnPath+'\\vulnerability.xml')
+        tree.write(vulnPath+'/vulnerability.xml')
 
         self.loadVulnerabilities(self.getCurrentProjPath())
         self.loadVulnerability(vulnObject)
@@ -837,13 +838,13 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                     self.changeVulnName(newName,old)
                 
     def changeVulnName(self,new,old):
-        newpath = self.getCurrentProjPath() + "\\" + new
-        oldpath = self.getCurrentProjPath() + "\\" + old
+        newpath = self.getCurrentProjPath() + "/" + new
+        oldpath = self.getCurrentProjPath() + "/" + old
         os.rename(oldpath,newpath)
-        self.changeCurrentVuln(new,0, newpath + "\\vulnerability.xml")
+        self.changeCurrentVuln(new,0, newpath + "/vulnerability.xml")
 
     def getCurrentVulnPath(self):
-        return self.projPath.getText() + "\\" + self.clearStr(self.vulnName.getText())
+        return self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText())
 
     def getCurrentProjPath(self):
         return self.projPath.getText()
@@ -928,7 +929,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def changeCurrentVuln(self,value,fieldNumber, xmlPath = "def"):
         if xmlPath == "def":
-            xmlPath = self.getCurrentVulnPath() + "\\vulnerability.xml"
+            xmlPath = self.getCurrentVulnPath() + "/vulnerability.xml"
         document = self.getXMLDoc(xmlPath)
         nodeList = document.getDocumentElement().getChildNodes()
         nodeList.item(fieldNumber).setTextContent(value)
@@ -948,11 +949,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.colorCombo.setSelectedItem(vulnObject.getColor())
         self.screenshotsList.clear()
 
-        for fileName in os.listdir(self.projPath.getText()+"\\"+self.clearStr(vulnObject.getName())):
+        for fileName in os.listdir(self.projPath.getText()+"/"+self.clearStr(vulnObject.getName())):
             if fileName.endswith(".jpg"):
                 self.screenshotsList.addElement(fileName)
-                imgPath = self.projPath.getText()+"\\"+self.clearStr(vulnObject.getName())+'\\'+fileName
-                imgPath = imgPath.replace("\\","\\\\")
+                imgPath = self.projPath.getText()+"/"+self.clearStr(vulnObject.getName())+'/'+fileName
+                # imgPath = imgPath.replace("/","//")
                 self.loadSS(imgPath)
 
         if (self.screenshotsList.getSize() == 0):
@@ -981,7 +982,7 @@ class Table(JTable):
         self._extender = extender
         self.setModel(extender)
         self.addMouseListener(mouseclick(self._extender))
-        self.getColumnModel().getColumn(0).setPreferredWidth(80)
+        self.getColumnModel().getColumn(1).setPreferredWidth(200)
         return
 
     def prepareRenderer(self, renderer, row, column):
@@ -1023,9 +1024,9 @@ class imageClicked(MouseAdapter):
         if evt.button == 3:
             self._extender.imgMenu.show(evt.getComponent(), evt.getX(), evt.getY())
         else:
-            path = self._extender.getCurrentVulnPath() + "\\" + self._extender.ssList.getSelectedValue()
-            path = path.replace("\\","\\\\")
-            os.system('"' + path + '"')
+            path = self._extender.getCurrentVulnPath() + "/" + self._extender.ssList.getSelectedValue()
+            # path = path.replace("/","//")
+            os.system('"' + path + '"') # linux: eof -f <path> / xdg-open <path> / gnome-open
 
 class paintChange(ActionListener):
     def __init__(self, extender, color):
@@ -1040,7 +1041,7 @@ class copyImg(ActionListener):
         self._extender = extender
 
     def actionPerformed(self, e):
-        img = ImageIO.read(File(self._extender.getCurrentVulnPath() + "\\" + self._extender.ssList.getSelectedValue()))
+        img = ImageIO.read(File(self._extender.getCurrentVulnPath() + "/" + self._extender.ssList.getSelectedValue()))
         trans = ImageTransferable(img)
         c = Toolkit.getDefaultToolkit().getSystemClipboard()
         c.setContents( trans, None )
@@ -1062,7 +1063,7 @@ class ssChangedHandler(ListSelectionListener):
 
     def valueChanged(self, e):
         if self._extender.ssList.getSelectedValue() != None:
-            self._extender.loadSS(self._extender.projPath.getText()+'\\'+self._extender.clearStr(self._extender.vulnName.getText()) + "\\" + self._extender.clearStr(self._extender.ssList.getSelectedValue()))
+            self._extender.loadSS(self._extender.projPath.getText()+'/'+self._extender.clearStr(self._extender.vulnName.getText()) + "/" + self._extender.clearStr(self._extender.ssList.getSelectedValue()))
 
 class vulnTextChanged(DocumentListener):
     def __init__(self, extender):
@@ -1104,7 +1105,7 @@ class projectChangeHandler(ActionListener):
         self._extender = extender
 
     def actionPerformed(self, e):
-        xmlPath = self._extender.config.get('projects',self._extender.currentProject.getSelectedItem()) + "\\project.xml"
+        xmlPath = self._extender.config.get('projects',self._extender.currentProject.getSelectedItem()) + "/project.xml"
         document = self._extender.getXMLDoc(xmlPath)
         nodeList = document.getDocumentElement().getChildNodes()
         projName = nodeList.item(0).getTextContent()
