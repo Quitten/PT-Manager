@@ -72,7 +72,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.createSection('projects')
         self.createSection('general')
         self.config.read('config.ini')
-
+        self.chooser = JFileChooser()
         # create the log and a lock on which to synchronize when adding log entries
         self._log = ArrayList()
         self._lock = Lock()
@@ -101,9 +101,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         print "Disclaimer:\nThis extension might create folders and files in your hardisk which might be declared as sensitive information, make sure you are creating projects under encrypted partition"
         return
 
-    def initProjSettingsTab(self):
+    def initVulnerabilityTab(self):
         #
-        ##  init project settings tab
+        ##  init vulnerability tab
         #
 
         nameLabel = JLabel("Vulnerability Name:")
@@ -206,8 +206,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.pnl.add(self.threatLevel)
         self.pnl.add(self.colorCombo)
         
-    def initVulnerabilityTab(self):
-        ## project settings 
+    def initProjSettingsTab(self):
+        # init project settings 
         
         projNameLabel = JLabel("Name:")
         projNameLabel.setBounds(10, 50, 140, 30)
@@ -256,7 +256,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         currentProjectLabel = JLabel("Current:")
         currentProjectLabel.setBounds(10, 10, 140, 30)
-        # config = SafeConfigParser()
+
         projects = self.config.options('projects')
         self.currentProject = JComboBox(projects)
         self.currentProject.addActionListener(projectChangeHandler(self))
@@ -286,7 +286,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.projectSettings = JPanel()
         self.projectSettings.setBounds(0, 0, 1000, 1000)
         self.projectSettings.setLayout(None)
-
         self.projectSettings.add(reportLabel)
         self.projectSettings.add(detailsLabel)
         self.projectSettings.add(projPathLabel)
@@ -311,13 +310,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         ##  init autorize tabs
         #
         
-        # self.logTable = Table(self)
         self._splitpane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)
-        # self._splitpane.setResizeWeight(0)
-        # self._splitpane.setDividerLocation(0.90);
         self.scrollPane = JScrollPane(self.logTable)
         self._splitpane.setLeftComponent(self.scrollPane)
-        # self.scrollPane.getVerticalScrollBar().addAdjustmentListener(autoScrollListener(self))
         colorsMenu = JMenu("Paint")
         redMenu = JMenuItem("Red")
         noneMenu = JMenuItem("None")
@@ -344,7 +339,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         
         self.tabs.setSelectedIndex(2)
         self._splitpane.setRightComponent(self.tabs)
-        # self._splitpane.setResizeWeight(0)
 
     def initCallbacks(self):
         #
@@ -368,9 +362,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             for dirName in dirs:
                 xmlPath = projPath+"\\"+dirName+"\\vulnerability.xml"
                 xmlPath = xmlPath.replace("\\","\\\\")
-                factory = DocumentBuilderFactory.newInstance()
-                builder = factory.newDocumentBuilder()
-                document = builder.parse(xmlPath)
+                document = self.getXMLDoc(xmlPath)
                 nodeList = document.getDocumentElement().getChildNodes()
                 vulnName = nodeList.item(0).getTextContent()
                 severity = nodeList.item(1).getTextContent()
@@ -403,6 +395,21 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.config.write(f)
         f.close()
 
+    def getXMLDoc(self, xmlPath):
+        try:
+            document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xmlPath)
+            return document
+        except:
+            self._extender.popup("XML file not found")
+            return
+
+    def saveXMLDoc(self, doc, xmlPath):
+        transformerFactory = TransformerFactory.newInstance()
+        transformer = transformerFactory.newTransformer()
+        source = DOMSource(doc)
+        result = StreamResult(File(xmlPath))
+        transformer.transform(source, result)
+
     def generateReport(self,event):
         if self.reportType.getSelectedItem() == "HTML":
             path = self.reportToHTML()
@@ -413,46 +420,36 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             os.system('"' + path + '"')
 
     def exportProj(self,event):
-        chooser = JFileChooser()
-        chooser.setDialogTitle("Save project")
+        self.chooser.setDialogTitle("Save project")
         Ffilter = FileNameExtensionFilter("Zip files", ["zip"])
-        chooser.setFileFilter(Ffilter)
-        returnVal = chooser.showSaveDialog(None)
+        self.chooser.setFileFilter(Ffilter)
+        returnVal = self.chooser.showSaveDialog(None)
         if returnVal == JFileChooser.APPROVE_OPTION:
-            dst = str(chooser.getSelectedFile())
+            dst = str(self.chooser.getSelectedFile())
             shutil.make_archive(dst,"zip",self.getCurrentProjPath())
             self.popup("Project export successfuly")
 
     def importProj(self,event):
-        chooser = JFileChooser()
-        chooser.setDialogTitle("Select project zip to directory")
+        self.chooser.setDialogTitle("Select project zip to directory")
         Ffilter = FileNameExtensionFilter("Zip files", ["zip"])
-        chooser.setFileFilter(Ffilter)
-        returnVal = chooser.showOpenDialog(None)
+        self.chooser.setFileFilter(Ffilter)
+        returnVal = self.chooser.showOpenDialog(None)
         if returnVal == JFileChooser.APPROVE_OPTION:
-            zipPath = str(chooser.getSelectedFile())
-            chooser = JFileChooser()
-            chooser.setDialogTitle("Select project directory")
-            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
-            returnVal = chooser.showOpenDialog(None)
+            zipPath = str(self.chooser.getSelectedFile())
+            self.chooser.setDialogTitle("Select project directory")
+            self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
+            returnVal = self.chooser.showOpenDialog(None)
             if returnVal == JFileChooser.APPROVE_OPTION:
-                projPath = str(chooser.getSelectedFile()) + "\\PTManager"
+                projPath = str(self.chooser.getSelectedFile()) + "\\PTManager"
                 with zipfile.ZipFile(zipPath, "r") as z:
                     z.extractall(projPath)
 
                 xmlPath = projPath + "\\project.xml"
-                factory = DocumentBuilderFactory.newInstance()
-                builder = factory.newDocumentBuilder()
-                document = builder.parse(xmlPath)
+                document = self.getXMLDoc(xmlPath)
                 nodeList = document.getDocumentElement().getChildNodes()
                 projName = nodeList.item(0).getTextContent()
                 nodeList.item(1).setTextContent(projPath)
-                transformerFactory = TransformerFactory.newInstance()
-                transformer = transformerFactory.newTransformer()
-                source = DOMSource(document)
-                result = StreamResult(File(xmlPath))
-                transformer.transform(source, result)
-
+                self.saveXMLDoc(document, xmlPath)
                 self.config.set('projects', projName, projPath)
                 self.saveCfg()
                 self.reloadProjects()
@@ -477,7 +474,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             worksheet.write(row, 2, self._log.get(i).getDescription())
             worksheet.write(row, 3, self._log.get(i).getMitigation())
             row = row + 1
-            # check for request and images
+            # add requests and images as well
         workbook.close()
         return self.getCurrentProjPath() + '\\PT Manager Report.xlsx'
         
@@ -676,12 +673,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         return self.getCurrentProjPath() + "\\" + self.clearStr(vulnName) + "\\"+requestOrResponse+"_" + self.clearStr(vulnName)
 
     def chooseProjPath(self, event):
-        chooser = JFileChooser()
-        chooser.setDialogTitle("Select target directory")
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
-        returnVal = chooser.showOpenDialog(None)
+        self.chooser.setDialogTitle("Select target directory")
+        self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
+        returnVal = self.chooser.showOpenDialog(None)
         if returnVal == JFileChooser.APPROVE_OPTION:
-            projPath = str(chooser.getSelectedFile()) + "\\PTManager"
+            projPath = str(self.chooser.getSelectedFile()) + "\\PTManager"
             os.makedirs(projPath)
             self.projPath.setText(projPath)
 
@@ -928,8 +924,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             return vulnObject.getName()
         if columnIndex == 2:
             return vulnObject.getSeverity()
-        # if columnIndex == 2:
-        #     return vulnObject.getDescription()
         if columnIndex == 3:
             return vulnObject.getMitigation()
         if columnIndex == 4:
@@ -938,18 +932,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         return ""
 
     def changeCurrentVuln(self,value,fieldNumber, xmlPath = "def"):
-        factory = DocumentBuilderFactory.newInstance()
-        builder = factory.newDocumentBuilder()
         if xmlPath == "def":
             xmlPath = self.getCurrentVulnPath() + "\\vulnerability.xml"
-        document = builder.parse(xmlPath)
+        document = self.getXMLDoc(xmlPath)
         nodeList = document.getDocumentElement().getChildNodes()
         nodeList.item(fieldNumber).setTextContent(value)
-        transformerFactory = TransformerFactory.newInstance()
-        transformer = transformerFactory.newTransformer()
-        source = DOMSource(document)
-        result = StreamResult(File(xmlPath))
-        transformer.transform(source, result)
+        self.saveXMLDoc(document, xmlPath)
         self.loadVulnerabilities(self.getCurrentProjPath())
 
     def loadVulnerability(self, vulnObject):
@@ -1049,7 +1037,7 @@ class paintChange(ActionListener):
         self._extender = extender
         self._color = color
 
-    def actionPerformed(self, e): # add red and none
+    def actionPerformed(self, e): 
         self._extender.changeCurrentVuln(self._color,4)     
 
 class copyImg(ActionListener):
@@ -1122,13 +1110,7 @@ class projectChangeHandler(ActionListener):
 
     def actionPerformed(self, e):
         xmlPath = self._extender.config.get('projects',self._extender.currentProject.getSelectedItem()) + "\\project.xml"
-        factory = DocumentBuilderFactory.newInstance()
-        builder = factory.newDocumentBuilder()
-        try:
-            document = builder.parse(xmlPath)
-        except:
-            self._extender.popup("project.xml not found")
-            return
+        document = self._extender.getXMLDoc(xmlPath)
         nodeList = document.getDocumentElement().getChildNodes()
         projName = nodeList.item(0).getTextContent()
         path = nodeList.item(1).getTextContent()
