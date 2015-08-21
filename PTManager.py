@@ -78,19 +78,15 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self._lock = Lock()
         
         self.logTable = Table(self)
-        self.logTable.getColumnModel().getColumn(0).setMaxWidth(2)
+        self.logTable.getColumnModel().getColumn(0).setMaxWidth(3)
         self.logTable.getColumnModel().getColumn(1).setMinWidth(100)
 
         self._requestViewer = self._callbacks.createMessageEditor(self, False)
         self._responseViewer = self._callbacks.createMessageEditor(self, False)
 
-
-        self.initProjSettingsTab()
-
         self.initVulnerabilityTab()
-
+        self.initProjSettingsTab()
         self.initTabs()
-        
         self.initCallbacks()
 
         if self.projPath.getText() != None:
@@ -109,20 +105,20 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         nameLabel = JLabel("Vulnerability Name:")
         nameLabel.setBounds(10, 10, 140, 30)
 
-        self.addButton = JButton("Add Vulnerability",actionPerformed=self.addVuln)
-        self.addButton.setBounds(10, 500, 150, 30)
+        self.addButton = JButton("Add",actionPerformed=self.addVuln)
+        self.addButton.setBounds(10, 500, 100, 30) 
 
-        rmVulnButton = JButton("Remove Vulnerability",actionPerformed=self.rmVuln)
-        rmVulnButton.setBounds(415, 500, 150, 30)
+        rmVulnButton = JButton("Remove",actionPerformed=self.rmVuln)
+        rmVulnButton.setBounds(465, 500, 100, 30)
 
         mitigationLabel = JLabel("Mitigation:")
         mitigationLabel.setBounds(10, 290, 150, 30)
         
-        addSSBtn = JButton("Add SS from clipboard",actionPerformed=self.addSS)
-        addSSBtn.setBounds(750, 40, 150, 30)
+        addSSBtn = JButton("Add SS",actionPerformed=self.addSS)
+        addSSBtn.setBounds(750, 40, 110, 30) 
 
-        deleteSSBtn = JButton("Remove screenshot",actionPerformed=self.removeSS)
-        deleteSSBtn.setBounds(750, 75, 150, 30)
+        deleteSSBtn = JButton("Remove SS",actionPerformed=self.removeSS)
+        deleteSSBtn.setBounds(750, 75, 110, 30) 
 
         piclistLabel = JLabel("Images list:")
         piclistLabel.setBounds(580, 10, 140, 30)
@@ -213,7 +209,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         projNameLabel.setBounds(10, 50, 140, 30)
 
         self.projName = JTextField("")
-        self.projName.setBounds(140, 50, 270, 30)
+        self.projName.setBounds(140, 50, 320, 30)
         self.projName.getDocument().addDocumentListener(projTextChanged(self))
 
         detailsLabel = JLabel("Details:")
@@ -233,26 +229,28 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.projDetails = JTextArea("", 5, 30)
         self.projDetails.setWrapStyleWord(True);
         self.projDetails.setLineWrap(True)
-        self.projDetails.setBounds(10, 150, 400, 175)
 
         projDetailsScroll = JScrollPane(self.projDetails)
-        projDetailsScroll.setBounds(10, 150, 400, 175)
+        projDetailsScroll.setBounds(10, 150, 450, 175)
         projDetailsScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
 
         projPathLabel = JLabel("Path:")
         projPathLabel.setBounds(10, 90, 140, 30)
 
         self.projPath = JTextField("")
-        self.projPath.setBounds(140, 90, 270, 30)
-        
-        importProjButton = JButton("Import",actionPerformed=self.importProj)
-        importProjButton.setBounds(420, 10, 100, 30)
-
-        exportProjButton = JButton("Export",actionPerformed=self.exportProj)
-        exportProjButton.setBounds(525, 10, 100, 30)
+        self.projPath.setBounds(140, 90, 320, 30)
 
         chooseProjPathButton = JButton("Browse...",actionPerformed=self.chooseProjPath)
-        chooseProjPathButton.setBounds(420, 90, 100, 30)
+        chooseProjPathButton.setBounds(470, 90, 100, 30)
+        
+        importProjButton = JButton("Import",actionPerformed=self.importProj)
+        importProjButton.setBounds(470, 10, 100, 30)
+
+        exportProjButton = JButton("Export",actionPerformed=self.exportProj)
+        exportProjButton.setBounds(575, 10, 100, 30)
+
+        openProjButton = JButton("Open Directory",actionPerformed=self.openProj)
+        openProjButton.setBounds(680, 10, 130, 30)
 
         currentProjectLabel = JLabel("Current:")
         currentProjectLabel.setBounds(10, 10, 140, 30)
@@ -267,14 +265,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.autoSave.setBounds(300, 10, 140, 30)
         self.autoSave.setToolTipText("Will save any changed value while focus is out")
 
-        addProjButton = JButton("Add / Update Project",actionPerformed=self.addProj)
+        addProjButton = JButton("Add / Update",actionPerformed=self.addProj)
         addProjButton.setBounds(10, 330, 150, 30)
 
-        openProjButton = JButton("Open Project Directory",actionPerformed=self.openProj)
-        openProjButton.setBounds(640, 10, 150, 30)
-
-        removeProjButton = JButton("Remove Current Project",actionPerformed=self.rmProj)
-        removeProjButton.setBounds(260, 330, 150, 30)
+        removeProjButton = JButton("Remove Current",actionPerformed=self.rmProj)
+        removeProjButton.setBounds(315, 330, 146, 30)
 
         generalOptions = self.config.options('general')
         if 'default project' in generalOptions:
@@ -657,7 +652,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.colorCombo.setSelectedIndex(0)
         self.threatLevel.setSelectedIndex(0)
         self.screenshotsList.clear()
-        self.addButton.setText("Add Vulnerability")
+        self.addButton.setText("Add")
         self.firstPic.setIcon(None)
 
     def saveRequestResponse(self, type, requestResponse, vulnName):
@@ -813,8 +808,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def vulnNameChanged(self):
             if os.path.exists(self.getCurrentVulnPath()) and self.vulnName.getText() != "":
-                self.addButton.setText("Update Vulnerability")
-            elif self.addButton.getText() != "Add Vulnerability":
+                self.addButton.setText("Update")
+            elif self.addButton.getText() != "Add":
                 options = ["Create a new vulnerability", "Change current vulnerability name"]
                 n = JOptionPane.showOptionDialog(None,
                     "Would you like to?",
@@ -827,7 +822,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
                 if n == 0:
                     self.clearVulnerabilityTab(False)
-                    self.addButton.setText("Add Vulnerability")
+                    self.addButton.setText("Add")
                 else:
                     newName = JOptionPane.showInputDialog(
                     None,
@@ -941,7 +936,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.loadVulnerabilities(self.getCurrentProjPath())
 
     def loadVulnerability(self, vulnObject):
-        self.addButton.setText("Update Vulnerability")
+        self.addButton.setText("Update")
         self.vulnName.setText(vulnObject.getName())
         self.threatLevel.setSelectedItem(vulnObject.getSeverity())
         self.descriptionString.setText(vulnObject.getDescription())
