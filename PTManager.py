@@ -1,4 +1,4 @@
-import os, zipfile, shutil, inspect, random, sys
+import os, zipfile, shutil, inspect, random, sys, re, subprocess
 import xml.etree.ElementTree as ET
 try:
     sys.path.append('XlsxWriter-0.7.3')
@@ -56,7 +56,7 @@ from javax.xml.transform import TransformerFactory
 from javax.xml.transform.dom import DOMSource
 from javax.xml.transform.stream import StreamResult
 from javax.swing.filechooser import FileNameExtensionFilter
-
+# ---------- get where im in the hardisk then load the config.ini and template file from there.
 class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableModel, IContextMenuFactory):
 
     def registerExtenderCallbacks(self, callbacks):
@@ -218,7 +218,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         reportLabel = JLabel("Generate Report:")
         reportLabel.setBounds(10, 375, 140, 30)
 
-        types = ["HTML","XLSX"]
+        types = ["DOCX","HTML","XLSX"]
         self.reportType = JComboBox(types)
         self.reportType.setBounds(10, 400, 140, 30)
 
@@ -410,9 +410,11 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             path = self.reportToHTML()
         if self.reportType.getSelectedItem() == "XLSX":
             path = self.reportToXLS()
+        if self.reportType.getSelectedItem() == "DOCX":
+            path = self.generateReportFromDocxTemplate('template.docx',"newfile.docx", 'word/document.xml')
         n = JOptionPane.showConfirmDialog(None, "Report generated successfuly:\n%s\nWould you like to open it?" % (path), "PT Manager", JOptionPane.YES_NO_OPTION)
         if n == JOptionPane.YES_OPTION:
-            os.system('"' + path + '"')
+            os.system('"' + path + '"') # Bug! stucking burp until the file get closed
 
     def exportProj(self,event):
         self.chooser.setDialogTitle("Save project")
@@ -666,6 +668,40 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def getVulnReqResPath(self, requestOrResponse, vulnName):
         return self.getCurrentProjPath() + "/" + self.clearStr(vulnName) + "/"+requestOrResponse+"_" + self.clearStr(vulnName)
+
+    def htmlEscape(self,data):
+        return data.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+
+    def generateReportFromDocxTemplate(self, zipname, newZipName, filename):      
+        newZipName = self.getCurrentProjPath() + "/" + newZipName
+        with zipfile.ZipFile(zipname, 'r') as zin:
+            with zipfile.ZipFile(newZipName, 'w') as zout:
+                zout.comment = zin.comment
+                for item in zin.infolist():
+                    if item.filename != filename:
+                        zout.writestr(item, zin.read(item.filename))
+                    else:
+                        xml_content = zin.read(item.filename)
+                        result = re.findall("(.*)<w:body>(?:.*)<\/w:body>(.*)",xml_content)[0]
+                        newXML = result[0]
+                        templateBody = re.findall("<w:body>(.*)<\/w:body>", xml_content)[0]
+                        newBody = ""
+
+                        for i in range(0,self._log.size()):
+                            tmp = templateBody
+                            tmp = tmp.replace("$vulnerability", self.htmlEscape(self._log.get(i).getName()))
+                            tmp = tmp.replace("$severity", self.htmlEscape(self._log.get(i).getSeverity()))
+                            tmp = tmp.replace("$description", self.htmlEscape(self._log.get(i).getDescription()))
+                            tmp = tmp.replace("$mitigation", self.htmlEscape(self._log.get(i).getMitigation()))
+                            newBody = newBody + tmp
+                         
+                        newXML = newXML + newBody
+                        newXML = newXML + result[1]
+
+        with zipfile.ZipFile(newZipName, mode='a', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(filename, newXML)
+        return newZipName
+
 
     def chooseProjPath(self, event):
         self.chooser.setDialogTitle("Select target directory")
