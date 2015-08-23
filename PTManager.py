@@ -56,7 +56,7 @@ from javax.xml.transform import TransformerFactory
 from javax.xml.transform.dom import DOMSource
 from javax.xml.transform.stream import StreamResult
 from javax.swing.filechooser import FileNameExtensionFilter
-# ---------- get where im in the hardisk then load the config.ini and template file from there.
+
 class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableModel, IContextMenuFactory):
 
     def registerExtenderCallbacks(self, callbacks):
@@ -274,7 +274,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         generalOptions = self.config.options('general')
         if 'default project' in generalOptions:
             defaultProj = self.config.get('general','default project')
-            self.currentProject.setSelectedItem(defaultProj)
+            self.currentProject.getModel().setSelectedItem(defaultProj)
             self.projPath.setText(self.config.get('projects',self.currentProject.getSelectedItem()))
 
         self.clearProjTab = True
@@ -450,7 +450,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                 self.config.set('projects', projName, projPath)
                 self.saveCfg()
                 self.reloadProjects()
-                self.currentProject.setSelectedItem(projName)
+                self.currentProject.getModel().setSelectedItem(projName)
                 self.clearVulnerabilityTab() 
 
     def reportToXLS(self):
@@ -753,9 +753,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             return
 
         self.reloadProjects()
-        self.currentProject.setSelectedItem(self.projName.getText())
         self.clearVulnerabilityTab()
         self.clearList(None)
+        self.currentProject.getModel().setSelectedItem(self.projName.getText())
 
     def resize(self, image, width, height):
         bi = BufferedImage(width, height, BufferedImage.TRANSLUCENT)
