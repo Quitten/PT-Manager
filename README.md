@@ -37,5 +37,3 @@ Vulnerability Tab:
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/select.png)
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/request.png)
  
-# todos
-1. under construction
