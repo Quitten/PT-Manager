@@ -218,7 +218,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         reportLabel = JLabel("Generate Report:")
         reportLabel.setBounds(10, 375, 140, 30)
 
-        types = ["DOCX","HTML","XLSX"]
+        types = ["HTML","DOCX","XLSX"]
         self.reportType = JComboBox(types)
         self.reportType.setBounds(10, 400, 140, 30)
 
@@ -332,7 +332,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         self.tabs.addTab("Project Settings", self.projectSettings)
         
-        self.tabs.setSelectedIndex(2)
+        self.tabs.setSelectedIndex(3)
         self._splitpane.setRightComponent(self.tabs)
 
     def initCallbacks(self):
@@ -537,22 +537,22 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         for i in range(0,self._log.size()):
             name = self._log.get(i).getName()
-            request = "None"
-            response = "None"
-            path = self.getVulnReqResPath("request",name)
-            if os.path.exists(path):
-                request = self.newlineToBR(self.getFileContent(path))
-                
-            path = self.getVulnReqResPath("response",name)
-            if os.path.exists(path):
-                response = self.newlineToBR(self.getFileContent(path))
+            requestPath = self.getVulnReqResPath("request",name) .replace("\\","\\\\")
+            requestHTML = "No Request"
+            if os.path.exists(requestPath):
+                requestHTML = """<input type="button" value="Load" onclick="document.getElementById('requestFrame%s').src = '%s'"/><br><br><iframe id="requestFrame%s" width="870" height="500"></iframe>""" % (i, requestPath, i)
+            responsePath = self.getVulnReqResPath("response",name).replace("\\","\\\\")
+            responseHTML = "No Response"
+            if os.path.exists(responsePath):
+                responseHTML = """<input type="button" value="Load" onclick="document.getElementById('responseFrame%s').src = '%s'"/><br><br><iframe id="responseFrame%s" width="870" height="500"></iframe>""" % (i, responsePath, i)
+
             images = ""
             for fileName in os.listdir(self.projPath.getText()+"/"+self.clearStr(name)):
                 if fileName.endswith(".jpg"):
                     images += "%s<br><img src=\"%s\"><br><br>" % (fileName, self.projPath.getText()+"/"+self.clearStr(name) + "/" + fileName)
             description = self.newlineToBR(self._log.get(i).getDescription())
             mitigation = self.newlineToBR(self._log.get(i).getMitigation())
-            htmlContent +=  self.convertVulntoTable(i,name,self._log.get(i).getSeverity(), description,mitigation, request, response, images)
+            htmlContent +=  self.convertVulntoTable(i,name,self._log.get(i).getSeverity(), description,mitigation, requestHTML, responseHTML, images)
         htmlContent += "</div></body></html>"
         f = open(self.getCurrentProjPath() + '/PT Manager Report.html', 'w')
         f.writelines(htmlContent)
@@ -569,6 +569,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         return content
 
     def convertVulntoTable(self, number, name, severity, description, mitigation, request = "None", response = "None", images = "None"):
+        name = self.htmlEscape(name)
+        description = self.htmlEscape(description)
+        mitigation = self.htmlEscape(mitigation)
         return """<div style="width: 100%%;height: 30px;text-align: center;background-color:#E0E0E0;font-size: 17px;font-weight: bold;color: #000;padding-top: 10px;">%s <a href="javascript:divHideShow('Table_%s');" style="color:#191970">(OPEN / CLOSE)</a></div>
         <div id="Table_%s" style="display: none;">
             <table width="100%%" cellspacing="0" cellpadding="0" style="margin: 0px auto;text-align: left;border-top: 0px;">
@@ -1210,6 +1213,10 @@ class handleMenuItems(ActionListener):
         if selectedVuln != None:
             if self._messageInfo.getRequest() != None:
                 self._extender.saveRequestResponse('request',self._messageInfo.getRequest(),selectedVuln)
+            else:
+                self._extender.saveRequestResponse('request',"None",selectedVuln)
             if self._messageInfo.getResponse() != None:
                 self._extender.saveRequestResponse('response',self._messageInfo.getResponse(),selectedVuln)
+            else:
+                self._extender.saveRequestResponse('response',"None",selectedVuln)
             self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
