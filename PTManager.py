@@ -1,4 +1,4 @@
-import os, zipfile, shutil, inspect, random, sys, re, subprocess
+import os, zipfile, shutil, inspect, random, sys, re, subprocess, platform
 import xml.etree.ElementTree as ET
 try:
     sys.path.append('XlsxWriter-0.7.3')
@@ -414,7 +414,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             path = self.generateReportFromDocxTemplate('template.docx',"newfile.docx", 'word/document.xml')
         n = JOptionPane.showConfirmDialog(None, "Report generated successfuly:\n%s\nWould you like to open it?" % (path), "PT Manager", JOptionPane.YES_NO_OPTION)
         if n == JOptionPane.YES_OPTION:
-            os.system('"' + path + '"') # Bug! stucking burp until the file get closed
+            self.openFolderOrFile(path)
 
     def exportProj(self,event):
         self.chooser.setDialogTitle("Save project")
@@ -666,8 +666,19 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         f.write(requestResponse)
         f.close()
 
+    def openFolderOrFile(self, path):
+        plat = platform.platform()
+        print path
+        if "on-Windows" in plat:
+            path = path.replace("/","\\")
+            subprocess.Popen(["explorer", path])
+        elif "on-Linux" in plat:
+            subprocess.Popen(["xdg-open", path])
+        elif "on-Darwin" in plat:
+            subprocess.Popen(["open", path])
+
     def openProj(self, event):
-        os.system('explorer ' + self.projPath.getText())
+        self.openFolderOrFile(self.projPath.getText())
 
     def getVulnReqResPath(self, requestOrResponse, vulnName):
         return self.getCurrentProjPath() + "/" + self.clearStr(vulnName) + "/"+requestOrResponse+"_" + self.clearStr(vulnName)
