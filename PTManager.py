@@ -93,7 +93,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.loadVulnerabilities(self.projPath.getText())
 
         print "Thank you for installing PT Vulnerabilities Manager v1.0 extension"
-        print "by Barak Tawily\n\n\n"
+        print "by Barak Tawily\n\nGithub:\nhttps://github.com/Quitten/PT-Manager\n\n\n"
         print "Disclaimer:\nThis extension might create folders and files in your hardisk which might be declared as sensitive information, make sure you are creating projects under encrypted partition"
         return
 
