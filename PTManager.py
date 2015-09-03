@@ -356,7 +356,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         for root, dirs, files in os.walk(projPath): # make it go only for dirs
             for dirName in dirs:
                 xmlPath = projPath+"/"+dirName+"/vulnerability.xml"
-                # xmlPath = xmlPath.replace("/","//")
                 document = self.getXMLDoc(xmlPath)
                 nodeList = document.getDocumentElement().getChildNodes()
                 vulnName = nodeList.item(0).getTextContent()
@@ -553,7 +552,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             description = self.newlineToBR(self._log.get(i).getDescription())
             mitigation = self.newlineToBR(self._log.get(i).getMitigation())
             htmlContent +=  self.convertVulntoTable(i,name,self._log.get(i).getSeverity(), description,mitigation, requestHTML, responseHTML, images)
-        htmlContent += "</div></body></html>"
+        htmlContent += "<p align=\"right\">Developed by Barak Tawily</p></div></body></html>"
         f = open(self.getCurrentProjPath() + '/PT Manager Report.html', 'w')
         f.writelines(htmlContent)
         f.close()
@@ -668,13 +667,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def openFolderOrFile(self, path):
         plat = platform.platform()
-        print path
         if "on-Windows" in plat:
             path = path.replace("/","\\")
             subprocess.Popen(["explorer", path])
         elif "on-Linux" in plat:
             subprocess.Popen(["xdg-open", path])
-        elif "on-Darwin" in plat:
+        elif "on-Mac" or "on-Darwin" in plat:
             subprocess.Popen(["open", path])
 
     def openProj(self, event):
@@ -729,11 +727,16 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
     def reloadProjects(self):
         self.currentProject.setModel(DefaultComboBoxModel(self.config.options('projects')))
 
-    def rmProj(self, event):
-        if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
+    def rmProj(self, event): #uncomment the following comments in the function if you would like to remove the directory - insecure
+        # projPath = self.projPath.getText()
+        # if not os.path.exists(projPath+"/project.xml"):
+        #     self.popup("project.xml not found, cant delete the directory")
+        #     return
+        # if self.popUpAreYouSure("Are you sure you want to delete the following directory path? (including it's content sub directories and files)\n%s" % (projPath)) == JOptionPane.YES_OPTION:
+        if self.popUpAreYouSure("Are you sure you want to delete this project from the config file?\nNote: it will not be removed from the directory on your file system.") == JOptionPane.YES_OPTION:
             self._requestViewer.setMessage("None", False)
             self._responseViewer.setMessage("None", False)
-            shutil.rmtree(self.projPath.getText())
+            # shutil.rmtree(projPath)
             self.config.remove_option('projects',self.currentProject.getSelectedItem())
             self.reloadProjects()
             self.currentProject.setSelectedIndex(0)
@@ -782,8 +785,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
     def clearStr(self, var):
         return var.replace(" " , "_").replace("\\" , "").replace("/" , "").replace(":" , "").replace("*" , "").replace("?" , "").replace("\"" , "").replace("<" , "").replace(">" , "").replace("|" , "").replace("(" , "").replace(")" , "")
 
-    def popUpAreYouSure(self):
-        dialogResult = JOptionPane.showConfirmDialog(None,"Are you sure?","Warning",JOptionPane.YES_NO_OPTION)
+    def popUpAreYouSure(self, msg = "Are you sure?"):
+        dialogResult = JOptionPane.showConfirmDialog(None,msg,"Warning",JOptionPane.YES_NO_OPTION)
         if dialogResult == 0:
             return 0
         return 1
@@ -793,8 +796,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             os.remove(self.getCurrentVulnPath() + "/" + self.ssList.getSelectedValue())
             self.ssList.getModel().remove(self.ssList.getSelectedIndex())
             self.firstPic.setIcon(ImageIcon(None))
-            # check if there is images and select the first one
-            # bug in linux
 
     def addSS(self,event):
         clipboard = Toolkit.getDefaultToolkit().getSystemClipboard()
@@ -1003,7 +1004,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             if fileName.endswith(".jpg"):
                 self.screenshotsList.addElement(fileName)
                 imgPath = self.projPath.getText()+"/"+self.clearStr(vulnObject.getName())+'/'+fileName
-                # imgPath = imgPath.replace("/","//")
                 self.loadSS(imgPath)
 
         if (self.screenshotsList.getSize() == 0):
@@ -1075,8 +1075,7 @@ class imageClicked(MouseAdapter):
             self._extender.imgMenu.show(evt.getComponent(), evt.getX(), evt.getY())
         else:
             path = self._extender.getCurrentVulnPath() + "/" + self._extender.ssList.getSelectedValue()
-            # path = path.replace("/","//")
-            os.system('"' + path + '"') # linux: eof -f <path> / xdg-open <path> / gnome-open
+            self._extender.openFolderOrFile(path)
 
 class paintChange(ActionListener):
     def __init__(self, extender, color):
