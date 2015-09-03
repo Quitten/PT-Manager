@@ -72,7 +72,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.createSection('projects')
         self.createSection('general')
         self.config.read('config.ini')
-        self.chooser = JFileChooser()
+        homeDir = os.path.expanduser("~")
+        self.chooser = JFileChooser(homeDir)
         # create the log and a lock on which to synchronize when adding log entries
         self._log = ArrayList()
         self._lock = Lock()
