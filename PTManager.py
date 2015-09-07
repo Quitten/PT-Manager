@@ -146,8 +146,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.firstPic.addMouseListener(imageClicked(self))
 
         self.vulnName = JTextField("")
-        self.vulnName.getDocument().addDocumentListener(vulnTextChanged(self))
-        self.vulnName.setBounds(140, 10, 422, 30)
+        self.vulnName.setBounds(140, 10, 322, 30)
+
+        self.newVulnBtn = JButton("New", actionPerformed=self.newVulnBtnClicked)
+        self.newVulnBtn.setBounds(465, 10, 100, 30)
 
         sevirities = ["Unclassified", "Critical","High","Medium","Low"]
         self.threatLevel = JComboBox(sevirities);
@@ -156,7 +158,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         colors = ["Color:", "Green", "Red"]
         self.colorCombo = JComboBox(colors);
         self.colorCombo.setBounds(465, 45, 100, 30)
-        self.colorCombo
 
         severityLabel = JLabel("Threat Level:")
         severityLabel.setBounds(10, 45, 100, 30)
@@ -198,9 +199,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.pnl.add(descriptionStringScroll)
         self.pnl.add(self.ssList)
         self.pnl.add(self.firstPic)
-        self.pnl.add(self.addButton)
         self.pnl.add(self.vulnName)
+        self.pnl.add(self.addButton)
         self.pnl.add(self.threatLevel)
+        self.pnl.add(self.newVulnBtn)
         self.pnl.add(self.colorCombo)
         
     def initProjSettingsTab(self):
@@ -676,6 +678,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         elif "on-Mac" or "on-Darwin" in plat:
             subprocess.Popen(["open", path])
 
+    def newVulnBtnClicked(self, event):
+        self.clearVulnerabilityTab(True)
+        self.addButton.setText("Add")
+
     def openProj(self, event):
         self.openFolderOrFile(self.projPath.getText())
 
@@ -827,6 +833,13 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.loadVulnerabilities(self.getCurrentProjPath())
 
     def addVuln(self, event):
+        newName = self.vulnName.getText()
+        row = self.logTable.getSelectedRow()
+        old = self.logTable.getValueAt(row,1)
+        if self.addButton.getText() != "Add":
+            if newName != old:
+                if self.popUpAreYouSure("Are you sure you want to change the vulnerability name?") == JOptionPane.YES_OPTION:
+                    self.changeVulnName(newName,old)
         if self.colorCombo.getSelectedItem() == "Color:":
             colorTxt = None
         else:
@@ -858,36 +871,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         self.loadVulnerabilities(self.getCurrentProjPath())
         self.loadVulnerability(vulnObject)
-
-    def vulnNameChanged(self):
-            if os.path.exists(self.getCurrentVulnPath()) and self.vulnName.getText() != "":
-                self.addButton.setText("Update")
-            elif self.addButton.getText() != "Add":
-                options = ["Create a new vulnerability", "Change current vulnerability name"]
-                n = JOptionPane.showOptionDialog(None,
-                    "Would you like to?",
-                    "Vulnerability Name",
-                    JOptionPane.YES_NO_CANCEL_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    None,
-                    options,
-                    options[0]);
-
-                if n == 0:
-                    self.clearVulnerabilityTab(False)
-                    self.addButton.setText("Add")
-                else:
-                    newName = JOptionPane.showInputDialog(
-                    None,
-                    "Enter new name:",
-                    "Vulnerability Name",
-                    JOptionPane.PLAIN_MESSAGE,
-                    None,
-                    None,
-                    self.vulnName.getText())
-                    row = self.logTable.getSelectedRow()
-                    old = self.logTable.getValueAt(row,1)                   
-                    self.changeVulnName(newName,old)
                 
     def changeVulnName(self,new,old):
         newpath = self.getCurrentProjPath() + "/" + new
@@ -1114,21 +1097,6 @@ class ssChangedHandler(ListSelectionListener):
     def valueChanged(self, e):
         if self._extender.ssList.getSelectedValue() != None:
             self._extender.loadSS(self._extender.projPath.getText()+'/'+self._extender.clearStr(self._extender.vulnName.getText()) + "/" + self._extender.clearStr(self._extender.ssList.getSelectedValue()))
-
-class vulnTextChanged(DocumentListener):
-    def __init__(self, extender):
-        self._extender = extender
-
-    def removeUpdate(self, e):
-        if len(inspect.stack()) == 1:
-            self._extender.vulnNameChanged()
-        return
-        
-
-    def insertUpdate(self, e):
-        if len(inspect.stack()) == 1:
-            self._extender.vulnNameChanged()
-        return
 
 class projTextChanged(DocumentListener):
     def __init__(self, extender):
