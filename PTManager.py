@@ -277,8 +277,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         generalOptions = self.config.options('general')
         if 'default project' in generalOptions:
             defaultProj = self.config.get('general','default project')
-            self.currentProject.getModel().setSelectedItem(defaultProj)
-            self.projPath.setText(self.config.get('projects',self.currentProject.getSelectedItem()))
+            defaultProj = self.config.get('projects',defaultProj)
+            xmlPath = defaultProj + "/project.xml"
+            self.loadProject(xmlPath)
 
         self.clearProjTab = True
         self.projectSettings = JPanel()
@@ -397,7 +398,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xmlPath)
             return document
         except:
-            self._extender.popup("XML file not found")
+            self.popup("XML file not found")
             return
 
     def saveXMLDoc(self, doc, xmlPath):
@@ -1009,6 +1010,25 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         else:
             self._responseViewer.setMessage("None", False)
 
+    def loadProject(self, projXMLPath):
+        document = self.getXMLDoc(projXMLPath)
+        nodeList = document.getDocumentElement().getChildNodes()
+        projName = nodeList.item(0).getTextContent()
+        path = nodeList.item(1).getTextContent()
+        details = nodeList.item(2).getTextContent()
+        if nodeList.item(3).getTextContent() == "True":
+            autoSaveMode = True
+        else:
+            autoSaveMode = False
+        self.projPath.setText(path)
+        self.clearProjTab = True
+        self.projName.setText(projName)
+        self.projDetails.setText(details)
+        self.autoSave.setSelected(autoSaveMode)
+        self.config.set('general', "default project", self.currentProject.getSelectedItem())
+        self.saveCfg()
+        self.clearVulnerabilityTab()
+        self.loadVulnerabilities(self.projPath.getText())
 
 class Table(JTable):
 
@@ -1124,26 +1144,8 @@ class projectChangeHandler(ActionListener):
 
     def actionPerformed(self, e):
         xmlPath = self._extender.config.get('projects',self._extender.currentProject.getSelectedItem()) + "/project.xml"
-        document = self._extender.getXMLDoc(xmlPath)
-        nodeList = document.getDocumentElement().getChildNodes()
-        projName = nodeList.item(0).getTextContent()
-        path = nodeList.item(1).getTextContent()
-        details = nodeList.item(2).getTextContent()
-        if nodeList.item(3).getTextContent() == "True":
-            autoSaveMode = True
-        else:
-            autoSaveMode = False
-        self._extender.projPath.setText(path)
-        self._extender.clearProjTab = True
-        self._extender.projName.setText(projName)
-        self._extender.projDetails.setText(details)
-        self._extender.autoSave.setSelected(autoSaveMode)
-        self._extender.config.set('general', "default project", self._extender.currentProject.getSelectedItem())
-        self._extender.saveCfg()
-        self._extender.clearVulnerabilityTab()
-        self._extender.loadVulnerabilities(self._extender.projPath.getText())
-
-
+        self._extender.loadProject(xmlPath)
+        
 class vulnerability():
     def __init__(self,name,severity,description,mitigation,color):
         self.name = name
