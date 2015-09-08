@@ -178,7 +178,6 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.mitigationStr.setWrapStyleWord(True);
         self.mitigationStr.setLineWrap(True)
         self.mitigationStr.setBounds(10, 320, 555, 175)
-
         mitigationStrScroll = JScrollPane(self.mitigationStr)
         mitigationStrScroll.setBounds(10, 320, 555, 175)
         mitigationStrScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
@@ -263,10 +262,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.currentProject.addActionListener(projectChangeHandler(self))
         self.currentProject.setBounds(140, 10, 140, 30)
 
-        self.autoSave = JCheckBox("Auto Save Mode")
+        self.autoSave = JCheckBox("Auto Save Mode") 
         self.autoSave.setEnabled(False)  # implement this feature
         self.autoSave.setBounds(300, 10, 140, 30)
-        self.autoSave.setToolTipText("Will save any changed value while focus is out")
+        self.autoSave.setToolTipText("Will save any changed value when focus lost in the vulnerability tab")
 
         addProjButton = JButton("Add / Update",actionPerformed=self.addProj)
         addProjButton.setBounds(10, 330, 150, 30)
@@ -367,10 +366,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                 description = nodeList.item(2).getTextContent()
                 mitigation = nodeList.item(3).getTextContent()
                 color = nodeList.item(4).getTextContent()
-                test = vulnerability(vulnName,severity,description,mitigation,color)
+                vulnObject = vulnerability(vulnName,severity,description,mitigation,color)
                 self._lock.acquire()
                 row = self._log.size()
-                self._log.add(test)
+                self._log.add(vulnObject)
                 self.fireTableRowsInserted(row, row)
                 self._lock.release()
                 if vulnName == self.vulnName.getText():
@@ -822,7 +821,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         g = bufferedImage.createGraphics();
         g.drawImage(image, 0, 0, bufferedImage.getWidth(), bufferedImage.getHeight(), Color.WHITE, None);
         ImageIO.write(bufferedImage, "jpg", file)
-        self.addVuln(self)
+        self.addVuln(None)
         self.ssList.setSelectedValue(name,True)
 
     def rmVuln(self, event):
@@ -841,6 +840,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             if newName != old:
                 if self.popUpAreYouSure("Are you sure you want to change the vulnerability name?") == JOptionPane.YES_OPTION:
                     self.changeVulnName(newName,old)
+                else:
+                    self.vulnName.setText(old)
+                    return
         if self.colorCombo.getSelectedItem() == "Color:":
             colorTxt = None
         else:
@@ -874,9 +876,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.loadVulnerability(vulnObject)
                 
     def changeVulnName(self,new,old):
-        newpath = self.getCurrentProjPath() + "/" + new
-        oldpath = self.getCurrentProjPath() + "/" + old
-        os.rename(oldpath,newpath)
+        newpath = self.getCurrentProjPath() + "/" + self.clearStr(new)
+        oldpath = self.getCurrentProjPath() + "/" + self.clearStr(old)
+        os.rename(oldpath, newpath)
         self.changeCurrentVuln(new,0, newpath + "/vulnerability.xml")
 
     def getCurrentVulnPath(self):
@@ -1136,7 +1138,6 @@ class projTextChanged(DocumentListener):
                 self._extender.clearProjectTab()
                 self._extender.clearProjTab = False
         return
-
 
 class projectChangeHandler(ActionListener):
     def __init__(self, extender):
