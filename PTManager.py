@@ -728,7 +728,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         returnVal = self.chooser.showOpenDialog(None)
         if returnVal == JFileChooser.APPROVE_OPTION:
             projPath = str(self.chooser.getSelectedFile()) + "/PTManager"
-            os.makedirs(projPath)
+            if not os.path.exists(projPath):
+                os.makedirs(projPath)
+            else:
+                self.popup("Error: PTManager folder already exists, please choose other folder")
             self.projPath.setText(projPath)
 
     def reloadProjects(self):
@@ -834,9 +837,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def addVuln(self, event):
         newName = self.vulnName.getText()
-        row = self.logTable.getSelectedRow()
-        old = self.logTable.getValueAt(row,1)
         if self.addButton.getText() != "Add":
+            row = self.logTable.getSelectedRow()
+            old = self.logTable.getValueAt(row,1)
             if newName != old:
                 if self.popUpAreYouSure("Are you sure you want to change the vulnerability name?") == JOptionPane.YES_OPTION:
                     self.changeVulnName(newName,old)
@@ -1027,6 +1030,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.projName.setText(projName)
         self.projDetails.setText(details)
         self.autoSave.setSelected(autoSaveMode)
+        self.currentProject.setSelectedItem(projName.lower())
         self.config.set('general', "default project", self.currentProject.getSelectedItem())
         self.saveCfg()
         self.clearVulnerabilityTab()
