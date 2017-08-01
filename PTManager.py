@@ -17,6 +17,7 @@ from threading import Lock
 from java.awt import Color
 from java.awt import RenderingHints
 from java.awt import Toolkit
+from java.util import Arrays
 from java.util import ArrayList
 from java.util import LinkedList
 from javax.swing import JList
@@ -45,6 +46,7 @@ from javax.swing.event import DocumentListener
 from javax.swing.event import ListSelectionListener
 from javax.swing.table import AbstractTableModel
 from javax.swing.border import LineBorder
+from java.awt.event import KeyListener
 from java.awt.event import MouseAdapter
 from java.awt.event import ActionListener
 from java.awt.datatransfer import Clipboard
@@ -74,6 +76,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.config.read('config.ini')
         homeDir = os.path.expanduser("~")
         self.chooser = JFileChooser(homeDir)
+        self.searchTerm = ""
         # create the log and a lock on which to synchronize when adding log entries
         self._log = ArrayList()
         self._lock = Lock()
@@ -81,6 +84,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.logTable = Table(self)
         self.logTable.getColumnModel().getColumn(0).setMaxWidth(35)
         self.logTable.getColumnModel().getColumn(1).setMinWidth(100)
+        self.logTable.addKeyListener(keyPressedOnTable(self))
 
         self._requestViewer = self._callbacks.createMessageEditor(self, False)
         self._responseViewer = self._callbacks.createMessageEditor(self, False)
@@ -93,7 +97,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         if self.projPath.getText() != None:
             self.loadVulnerabilities(self.projPath.getText())
 
-        print "Thank you for installing PT Vulnerabilities Manager v1.0 extension"
+        print "Thank you for installing PT Vulnerabilities Manager v1.1 extension"
         print "by Barak Tawily\n\nGithub:\nhttps://github.com/Quitten/PT-Manager\n\n\n"
         print "Disclaimer:\nThis extension might create folders and files in your hardisk which might be declared as sensitive information, make sure you are creating projects under encrypted partition"
         return
@@ -172,7 +176,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         descriptionStringScroll = JScrollPane(self.descriptionString)
         descriptionStringScroll.setBounds(10, 110, 555, 175)
         descriptionStringScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
-
+        self.descriptionString.addKeyListener(handleAutoSave(self))
 
         self.mitigationStr = JTextArea("", 5, 30)
         self.mitigationStr.setWrapStyleWord(True);
@@ -378,6 +382,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         if selected == False and self._log.size() > 0:
             self.logTable.setRowSelectionInterval(0, 0)
             self.loadVulnerability(self._log.get(0))
+        self._backupLog = ArrayList(self._log)
         
     def createSection(self, sectioName):
         self.config.read('config.ini')
@@ -801,6 +806,26 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             return 0
         return 1
 
+    def filterTable(self, searchTerm):
+        self._lock.acquire()
+        self._log.clear()
+        for i in range(0,self._backupLog.size()):
+            if searchTerm in self._backupLog.get(i).getName().lower():
+                self._log.add(self._backupLog.get(i))
+                continue
+
+            if searchTerm in self._backupLog.get(i).getDescription().lower():
+                self._log.add(self._backupLog.get(i))
+                continue
+
+            if searchTerm in self._backupLog.get(i).getMitigation().lower():
+                self._log.add(self._backupLog.get(i))
+                continue
+
+        row = self._log.size()
+        self.fireTableRowsInserted(row, row)
+        self._lock.release()
+
     def removeSS(self,event):
         if self.popUpAreYouSure() == JOptionPane.YES_OPTION:
             os.remove(self.getCurrentVulnPath() + "/" + self.ssList.getSelectedValue())
@@ -836,6 +861,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.loadVulnerabilities(self.getCurrentProjPath())
 
     def addVuln(self, event):
+        posIndex = self.descriptionString.getCaretPosition();
         newName = self.vulnName.getText()
         if self.addButton.getText() != "Add":
             row = self.logTable.getSelectedRow()
@@ -853,7 +879,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self._lock.acquire()
         row = self._log.size()
         vulnObject = vulnerability(self.vulnName.getText(),self.threatLevel.getSelectedItem(),self.descriptionString.getText(),self.mitigationStr.getText() ,colorTxt)
-        self._log.add(vulnObject) 
+        self._log.add(vulnObject)
         self.fireTableRowsInserted(row, row)
         self._lock.release()
 
@@ -877,6 +903,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         self.loadVulnerabilities(self.getCurrentProjPath())
         self.loadVulnerability(vulnObject)
+        self.descriptionString.setCaretPosition(posIndex)
                 
     def changeVulnName(self,new,old):
         newpath = self.getCurrentProjPath() + "/" + self.clearStr(new)
@@ -1035,6 +1062,10 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.saveCfg()
         self.clearVulnerabilityTab()
         self.loadVulnerabilities(self.projPath.getText())
+
+    def changeTableColumnName(self, columnIndex, text):
+        self.logTable.getColumnModel().getColumn(columnIndex).setHeaderValue(text)
+        self.logTable.getTableHeader().repaint()
 
 class Table(JTable):
 
@@ -1206,3 +1237,43 @@ class handleMenuItems(ActionListener):
             else:
                 self._extender.saveRequestResponse('response',"None",selectedVuln)
             self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
+
+class handleAutoSave(KeyListener):
+    def __init__(self, extender):
+        self._extender = extender
+        self.lastKey = 0
+
+    def keyPressed(self, e):
+        if e.getKeyCode()==83:
+            if self.lastKey == 17:
+                self._extender.addVuln(None)
+        self.lastKey = e.getKeyCode()
+    
+    def keyReleased(self, e):
+        self.lastKey = 0
+
+    def keyTyped(self,e):
+        pass
+
+class keyPressedOnTable(KeyListener):
+    def __init__(self, extender):
+        self._extender = extender
+
+    def keyPressed(self, e): # if backspace is entered, remove char
+        if e.getKeyCode() == 8:
+            self._extender.searchTerm = str(self._extender.searchTerm[:-1])
+        else:
+            self._extender.searchTerm = self._extender.searchTerm + e.keyChar
+        
+        if self._extender.searchTerm == "":
+                self._extender.changeTableColumnName(1,"Vulnerability Name")
+        else:
+            self._extender.changeTableColumnName(1,"Searching for: " + self._extender.searchTerm)
+
+        self._extender.filterTable(self._extender.searchTerm)
+
+    def keyReleased(self, e):
+        pass
+
+    def keyTyped(self,e):
+        pass
