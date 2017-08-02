@@ -16,6 +16,7 @@ Penetration Test Vulnerabilities Manager is an extension for Burp Suite, written
 After installation, the PT Manager tab will be added to Burp.
  
 Project Settings Tab:
+
 ![alt tag](https://raw.githubusercontent.com/Quitten/PT-Manager/master/images/project_settings.png)
  
 1. Open the Project Settings tab (PT Manager -> Project Settings) and create a new project, make sure you are creating it under the encrypted partition.
