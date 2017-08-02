@@ -1044,6 +1044,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
     def loadProject(self, projXMLPath):
         self.changeTableColumnName(1, "Vulnerability Name")
+        self.searchTerm = ""
         document = self.getXMLDoc(projXMLPath)
         nodeList = document.getDocumentElement().getChildNodes()
         projName = nodeList.item(0).getTextContent()
