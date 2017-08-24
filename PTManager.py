@@ -1262,6 +1262,16 @@ class keyPressedOnTable(KeyListener):
         self._extender = extender
 
     def keyPressed(self, e): # if backspace is entered, remove char
+        if e.getKeyCode() == 40:
+            row = self._extender.logTable.getSelectedRow()+1
+            col = self._extender.logTable.getSelectedColumn()
+            self._extender.logTable.changeSelection(row, col, False, False)
+
+        if e.getKeyCode() == 38:
+            row = self._extender.logTable.getSelectedRow()-1
+            col = self._extender.logTable.getSelectedColumn()
+            self._extender.logTable.changeSelection(row, col, False, False)
+
         if e.getKeyCode() == 8:
             self._extender.searchTerm = str(self._extender.searchTerm[:-1])
         else:
