@@ -901,6 +901,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         tree = ET.ElementTree(xml)
         tree.write(vulnPath+'/vulnerability.xml')
 
+        self.searchTerm = ""
+        self.changeTableColumnName(1,"Vulnerability Name")
         self.loadVulnerabilities(self.getCurrentProjPath())
         self.loadVulnerability(vulnObject)
         self.descriptionString.setCaretPosition(posIndex)
@@ -1278,7 +1280,7 @@ class keyPressedOnTable(KeyListener):
             self._extender.searchTerm = self._extender.searchTerm + e.keyChar
         
         if self._extender.searchTerm == "":
-                self._extender.changeTableColumnName(1,"Vulnerability Name")
+            self._extender.changeTableColumnName(1,"Vulnerability Name")
         else:
             self._extender.changeTableColumnName(1,"Searching for: " + self._extender.searchTerm)
 
