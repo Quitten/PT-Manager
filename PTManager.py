@@ -810,15 +810,15 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self._lock.acquire()
         self._log.clear()
         for i in range(0,self._backupLog.size()):
-            if searchTerm in self._backupLog.get(i).getName().lower():
+            if searchTerm.lower() in self._backupLog.get(i).getName().lower():
                 self._log.add(self._backupLog.get(i))
                 continue
 
-            if searchTerm in self._backupLog.get(i).getDescription().lower():
+            if searchTerm.lower() in self._backupLog.get(i).getDescription().lower():
                 self._log.add(self._backupLog.get(i))
                 continue
 
-            if searchTerm in self._backupLog.get(i).getMitigation().lower():
+            if searchTerm.lower() in self._backupLog.get(i).getMitigation().lower():
                 self._log.add(self._backupLog.get(i))
                 continue
 
