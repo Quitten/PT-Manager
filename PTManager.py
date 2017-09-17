@@ -1276,6 +1276,8 @@ class keyPressedOnTable(KeyListener):
 
         if e.getKeyCode() == 8:
             self._extender.searchTerm = str(self._extender.searchTerm[:-1])
+        elif e.getKeyCode() == 10: #enter do nothing
+            pass
         else:
             self._extender.searchTerm = self._extender.searchTerm + e.keyChar
         
