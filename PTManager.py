@@ -173,15 +173,16 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.descriptionString.setWrapStyleWord(True);
         self.descriptionString.setLineWrap(True)
         self.descriptionString.setBounds(10, 110, 555, 175)
+        self.descriptionString.addKeyListener(handleAutoSave(self))
         descriptionStringScroll = JScrollPane(self.descriptionString)
         descriptionStringScroll.setBounds(10, 110, 555, 175)
         descriptionStringScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
-        self.descriptionString.addKeyListener(handleAutoSave(self))
 
         self.mitigationStr = JTextArea("", 5, 30)
         self.mitigationStr.setWrapStyleWord(True);
         self.mitigationStr.setLineWrap(True)
         self.mitigationStr.setBounds(10, 320, 555, 175)
+        self.mitigationStr.addKeyListener(handleAutoSave(self))
         mitigationStrScroll = JScrollPane(self.mitigationStr)
         mitigationStrScroll.setBounds(10, 320, 555, 175)
         mitigationStrScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
@@ -1242,13 +1243,13 @@ class handleMenuItems(ActionListener):
                 self._extender.saveRequestResponse('response',"None",selectedVuln)
             self._extender.loadVulnerability(self._extender._log.get(vulns.index(vulnName)))
 
-class handleAutoSave(KeyListener):
+class handleAutoSave(KeyListener): # CTRL + S
     def __init__(self, extender):
         self._extender = extender
         self.lastKey = 0
 
     def keyPressed(self, e):
-        if e.getKeyCode()==83:
+        if e.getKeyCode() == 83:
             if self.lastKey == 17:
                 self._extender.addVuln(None)
         self.lastKey = e.getKeyCode()
