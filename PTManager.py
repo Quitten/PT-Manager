@@ -1,5 +1,24 @@
-import os, zipfile, shutil, inspect, random, sys, re, subprocess, platform
+# -*- coding: utf-8 -*-
+import os, zipfile, shutil, inspect, random, sys, re, subprocess, platform, errno
 import xml.etree.ElementTree as ET
+import codecs
+import cgi
+import time
+from distutils.dir_util import copy_tree
+from xml.dom import minidom
+import sys
+
+#print sys.getdefaultencoding()
+#print sys.getfilesystemencoding()
+#print sys.stdout.encoding
+#print sys.stdin.encoding
+
+
+
+#teste = teste.encode('latin1', 'replace')
+
+#print teste
+
 try:
     sys.path.append('XlsxWriter-0.7.3')
     import xlsxwriter
@@ -58,6 +77,8 @@ from javax.xml.transform import TransformerFactory
 from javax.xml.transform.dom import DOMSource
 from javax.xml.transform.stream import StreamResult
 from javax.swing.filechooser import FileNameExtensionFilter
+from java.io import BufferedReader, InputStreamReader
+from java.lang import System
 
 class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableModel, IContextMenuFactory):
 
@@ -73,6 +94,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.config = SafeConfigParser()
         self.createSection('projects')
         self.createSection('general')
+        self.createSection('vulnerability path')
         self.config.read('config.ini')
         homeDir = os.path.expanduser("~")
         self.chooser = JFileChooser(homeDir)
@@ -90,6 +112,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self._responseViewer = self._callbacks.createMessageEditor(self, False)
 
         self.initVulnerabilityTab()
+        self.initSelectVulnTabs()
+        self.initCheckListTab()
         self.initProjSettingsTab()
         self.initTabs()
         self.initCallbacks()
@@ -110,20 +134,21 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         nameLabel = JLabel("Vulnerability Name:")
         nameLabel.setBounds(10, 10, 140, 30)
 
-        self.addButton = JButton("Add",actionPerformed=self.addVuln)
-        self.addButton.setBounds(10, 500, 100, 30) 
+        self.addButton = JButton("Add", actionPerformed=self.addVuln)
+        self.addButton.setBounds(10, 550, 100, 30)
 
-        rmVulnButton = JButton("Remove",actionPerformed=self.rmVuln)
-        rmVulnButton.setBounds(465, 500, 100, 30)
+        self.addToRepoButton = JButton("Add To/Update Repository", actionPerformed=self.addVulnToRepo)
+        self.addToRepoButton.setBounds(200, 550, 200, 30)
 
-        mitigationLabel = JLabel("Mitigation:")
-        mitigationLabel.setBounds(10, 290, 150, 30)
-        
-        addSSBtn = JButton("Add SS",actionPerformed=self.addSS)
-        addSSBtn.setBounds(750, 40, 110, 30) 
+        rmVulnButton = JButton("Remove", actionPerformed=self.rmVuln)
+        rmVulnButton.setBounds(465, 550, 100, 30)
 
-        deleteSSBtn = JButton("Remove SS",actionPerformed=self.removeSS)
-        deleteSSBtn.setBounds(750, 75, 110, 30) 
+
+        addSSBtn = JButton("Add SS", actionPerformed=self.addSS)
+        addSSBtn.setBounds(750, 40, 110, 30)
+
+        deleteSSBtn = JButton("Remove SS", actionPerformed=self.removeSS)
+        deleteSSBtn.setBounds(750, 75, 110, 30)
 
         piclistLabel = JLabel("Images list:")
         piclistLabel.setBounds(580, 10, 140, 30)
@@ -155,7 +180,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.newVulnBtn = JButton("New", actionPerformed=self.newVulnBtnClicked)
         self.newVulnBtn.setBounds(465, 10, 100, 30)
 
-        sevirities = ["Unclassified", "Critical","High","Medium","Low"]
+        sevirities = ["Unclassified", "Critical", "High", "Medium", "Low"]
         self.threatLevel = JComboBox(sevirities);
         self.threatLevel.setBounds(140, 45, 140, 30)
 
@@ -163,29 +188,82 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.colorCombo = JComboBox(colors);
         self.colorCombo.setBounds(465, 45, 100, 30)
 
+        owasp_classfication = ["OWASP:",
+                               "A1 - Injection",
+                               "A2 - Broken Autentication",
+                               "A3 - XML External Entities",
+                               "A4 - Insecure Direct Reference Object",
+                               "A5 - Broken Access Control",
+                               "A6 - Security Misconfiguration",
+                               "A7 - Cross-site Scripting(XSS)",
+                               "A8 - Insecure Deserialization",
+                               "A9 - Using Components With Known Vulnerabilities",
+                               "A10 - Insufficient Logging&Monitoring"]
+        self.owaspClassCombo = JComboBox(owasp_classfication)
+        self.owaspClassCombo.setBounds(310, 45, 100, 30)
+
+        mitigationLabel = JLabel("Mitigation:")
+        mitigationLabel.setBounds(10, 340, 100, 30)
+
+        refLabel = JLabel("References:")
+        refLabel.setBounds(10, 440, 100, 30)
+
         severityLabel = JLabel("Threat Level:")
         severityLabel.setBounds(10, 45, 100, 30)
 
         descriptionLabel = JLabel("Description:")
-        descriptionLabel.setBounds(10, 80, 100, 30)
+        descriptionLabel.setBounds(10, 140, 100, 30)
 
-        self.descriptionString = JTextArea("", 5, 30)
+        riskLabel = JLabel("Risk:")
+        riskLabel.setBounds(10, 240, 150, 30)
+
+        cweNumberLabel = JLabel("Number CWE:")
+        cweNumberLabel.setBounds(10, 80, 150, 30)
+
+        cweTitleLabel = JLabel("Title CWE:")
+        cweTitleLabel.setBounds(10, 120, 150, 30)
+
+        self.cwe_vuln ='' # ver aqui
+        self.cweNumberStr = JTextField("CWE-")
+
+        self.cweNumberStr.setBounds(140, 80, 100, 30)
+
+        self.cweTitleStr = JTextField("")
+        self.cweTitleStr.setBounds(140, 120, 350, 30)
+
+        self.risk_vuln ='' # ver aqui
+        self.riskStr = JTextArea('', 5, 30)
+        self.riskStr.setWrapStyleWord(True);
+        self.riskStr.setLineWrap(True)
+        self.riskStr.setBounds(10, 265, 555, 80)
+        riskStringScroll = JScrollPane(self.riskStr)
+        riskStringScroll.setBounds(10, 265, 555, 80)
+        riskStringScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
+
+        self.description_vuln ='' # ver aqui
+        self.descriptionString = JTextArea('', 5, 30)
         self.descriptionString.setWrapStyleWord(True);
         self.descriptionString.setLineWrap(True)
-        self.descriptionString.setBounds(10, 110, 555, 175)
-        self.descriptionString.addKeyListener(handleAutoSave(self))
+        self.descriptionString.setBounds(10, 165, 555, 80)
         descriptionStringScroll = JScrollPane(self.descriptionString)
-        descriptionStringScroll.setBounds(10, 110, 555, 175)
+        descriptionStringScroll.setBounds(10, 165, 555, 80)
         descriptionStringScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
 
         self.mitigationStr = JTextArea("", 5, 30)
         self.mitigationStr.setWrapStyleWord(True);
         self.mitigationStr.setLineWrap(True)
-        self.mitigationStr.setBounds(10, 320, 555, 175)
-        self.mitigationStr.addKeyListener(handleAutoSave(self))
+        self.mitigationStr.setBounds(10, 365, 555, 80)
         mitigationStrScroll = JScrollPane(self.mitigationStr)
-        mitigationStrScroll.setBounds(10, 320, 555, 175)
+        mitigationStrScroll.setBounds(10, 365, 555, 80)
         mitigationStrScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
+
+        self.refStr = JTextArea("", 5, 30)
+        self.refStr.setWrapStyleWord(True);
+        self.refStr.setLineWrap(True)
+        self.refStr.setBounds(10, 365, 555, 80)
+        refStrScroll = JScrollPane(self.refStr)
+        refStrScroll.setBounds(10, 465, 555, 80)
+        refStrScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
 
         self.pnl = JPanel()
         self.pnl.setBounds(0, 0, 1000, 1000);
@@ -198,17 +276,99 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.pnl.add(severityLabel)
         self.pnl.add(mitigationLabel)
         self.pnl.add(descriptionLabel)
+        self.pnl.add(riskLabel)
+        self.pnl.add(refLabel)
+        self.pnl.add(cweNumberLabel)
+        self.pnl.add(cweTitleLabel)
         self.pnl.add(previewPicLabel)
         self.pnl.add(mitigationStrScroll)
         self.pnl.add(descriptionStringScroll)
+        self.pnl.add(riskStringScroll)
+        self.pnl.add(refStrScroll)
+        #self.pnl.add(cweStringScroll)
+        self.pnl.add(self.cweNumberStr)
+        self.pnl.add(self.cweTitleStr)
         self.pnl.add(self.ssList)
         self.pnl.add(self.firstPic)
         self.pnl.add(self.vulnName)
         self.pnl.add(self.addButton)
+        self.pnl.add(self.addToRepoButton)
         self.pnl.add(self.threatLevel)
         self.pnl.add(self.newVulnBtn)
         self.pnl.add(self.colorCombo)
-        
+        self.pnl.add(self.owaspClassCombo)
+
+    def initCheckListTab(self):
+        """Initiate checklist tab"""
+
+        self.chklstpnl = JPanel()
+        self.chklstpnl.setBounds(0, 0, 1000, 1000)
+
+        chooseChkListPathButton = JButton("Browse...", actionPerformed=self.chooseVulnsPath)
+        chooseChkListPathButton.setBounds(25, 10, 100, 30)
+
+        self.chklstpnl.setBounds(0, 0, 1000, 1000);
+        self.chklstpnl.setLayout(None)
+        self.chklstpnl.add(chooseChkListPathButton)
+
+
+    def initSelectVulnTabs(self):
+
+
+        self.vulnsInDirList = JComboBox();
+        self.vulnsInDirList.setBounds(140, 55, 340, 30)
+
+        self.addButton2 = JButton("Add", actionPerformed=self.insertSingleVuln)
+        self.addButton2.setBounds(25, 55, 100, 30)
+
+        self.loadVulnRepoBtn = JButton("Load", actionPerformed=self.justLoadVuln)
+        self.loadVulnRepoBtn.setBounds(25, 85, 100, 30)
+
+        chooseVulnsPathButton = JButton("Browse...", actionPerformed=self.chooseVulnsPath)
+        chooseVulnsPathButton.setBounds(25, 10, 100, 30)
+	
+        getAffectedURL = JLabel("Insert Affected URL:")
+        getAffectedURL.setBounds(25, 125, 150, 30)
+
+        self.getAffectedUrlStr = JTextArea("", 5, 30)
+        self.getAffectedUrlStr.setWrapStyleWord(True);
+        self.getAffectedUrlStr.setLineWrap(True)
+        self.getAffectedUrlStr.setBounds(140, 125, 555, 80)
+        affectedUrlStrScroll = JScrollPane(self.getAffectedUrlStr)
+        affectedUrlStrScroll.setBounds(140, 125, 555, 80)
+        affectedUrlStrScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED)
+
+        self.insertAffectedUrlBtn = JButton("Insert URL's", actionPerformed=self.addVuln)
+        self.insertAffectedUrlBtn.setBounds(25, 165, 100, 30)
+
+        self.vulnsPathLabel = JTextField("")
+        self.vulnsPathLabel.setBounds(140, 10, 320, 30)
+
+
+        self.loadVulnPath()
+
+        self.selectVulnPanel = JPanel()
+        self.selectVulnPanel.setBounds(0, 0, 1000, 1000);
+        self.selectVulnPanel.setLayout(None)
+        self.selectVulnPanel.add(chooseVulnsPathButton)
+        self.selectVulnPanel.add(self.addButton2)
+        self.selectVulnPanel.add(self.loadVulnRepoBtn)
+        self.selectVulnPanel.add(self.insertAffectedUrlBtn)
+        self.selectVulnPanel.add(getAffectedURL)
+        self.selectVulnPanel.add(affectedUrlStrScroll)
+        self.selectVulnPanel.add(self.vulnsPathLabel)
+        self.selectVulnPanel.add(self.vulnsInDirList)
+	try:
+	    vulnsPath = str(os.getcwd()).replace("PT-Manager-master","Vulns")
+	    self.config.set('vulnerability path', 'vulnDirPath', vulnsPath)
+            self.saveCfg()
+            self.vulnsPathLabel.setText(vulnsPath)
+            self.loadVulnsIntoComboBox(vulnsPath)
+	    print "Success loaded vulnerabilities"
+        except Exception as e:
+	    print "Wasn't possible to load vulnerabilities"
+	    print e
+
     def initProjSettingsTab(self):
         # init project settings 
         
@@ -337,10 +497,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.tabs.addTab("Response", self._responseViewer.getComponent())
 
         self.tabs.addTab("Vulnerability", self.pnl)
+        self.tabs.addTab("Select Vulns", self.selectVulnPanel)
 
         self.tabs.addTab("Project Settings", self.projectSettings)
-        
-        self.tabs.setSelectedIndex(3)
+        #self.tabs.addTab("Checklist Tab", self.chklstpnl)
+
+        self.tabs.setSelectedIndex(4)
         self._splitpane.setRightComponent(self.tabs)
 
     def initCallbacks(self):
@@ -357,34 +519,100 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         # add the custom tab to Burp's UI
         self._callbacks.addSuiteTab(self)
 
+    def insertSingleVuln(self, event):
+        self.src = self.vulnsPathLabel.getText() + "/" + str(self.vulnsInDirList.getSelectedItem())
+        self.dst = self.getCurrentProjPath() + "/" + str(self.vulnsInDirList.getSelectedItem())
+        self.copy(self.src, self.dst)
+        self.loadVulnerabilities(self.getCurrentProjPath())
 
-    def loadVulnerabilities(self, projPath):
+    def justLoadVuln(self, event):
+        self.loadVulnerabilities(self.vulnsPathLabel.getText() ,self.vulnsInDirList.getSelectedItem(),True)
+
+
+    def loadVulnerabilities(self, projPath, nameVuln=None, justLoad_bool = False):
         self.clearList(None)
         selected = False
-        for root, dirs, files in os.walk(projPath): # make it go only for dirs
-            for dirName in dirs:
-                xmlPath = projPath+"/"+dirName+"/vulnerability.xml"
-                document = self.getXMLDoc(xmlPath)
-                nodeList = document.getDocumentElement().getChildNodes()
-                vulnName = nodeList.item(0).getTextContent()
-                severity = nodeList.item(1).getTextContent()
-                description = nodeList.item(2).getTextContent()
-                mitigation = nodeList.item(3).getTextContent()
-                color = nodeList.item(4).getTextContent()
-                vulnObject = vulnerability(vulnName,severity,description,mitigation,color)
-                self._lock.acquire()
-                row = self._log.size()
+        if nameVuln is None:
+            for root, dirs, files in os.walk(projPath):  # make it go only for dirs
+                for dirName in dirs:
+                    xmlPath = projPath + "/" + dirName + "/vulnerability.xml"
+                    document = self.getXMLDoc(xmlPath)
+                    nodeList = document.getDocumentElement().getChildNodes()
+                    vulnName = nodeList.item(0).getTextContent()
+                    severity = nodeList.item(1).getTextContent()
+                    description = nodeList.item(2).getTextContent()
+                    mitigation = nodeList.item(3).getTextContent()
+                    color = nodeList.item(4).getTextContent()
+                    risk = nodeList.item(5).getTextContent()
+                    cweTitle = nodeList.item(6).getTextContent()
+                    cweNum = nodeList.item(7).getTextContent()
+                    references = nodeList.item(8).getTextContent()
+                    try:
+                        owasp_class = nodeList.item(9).getTextContent()
+                    except:
+                        owasp_class = ''
+                        pass
+
+                    try:
+                        affectedURL = nodeList.item(10).getTextContent()
+                    except:
+                        affectedURL = ''
+                        pass
+
+                    #print owasp_class
+                    vulnObject = vulnerability(vulnName, severity, description, mitigation, color,risk,cweNum,cweTitle, references, affectedURL, owasp_class)
+                    self._lock.acquire()
+                    row = self._log.size()
+                    self._log.add(vulnObject)
+                    self.fireTableRowsInserted(row, row)
+                    self._lock.release()
+                    if vulnName == self.vulnName.getText():
+                        self.logTable.setRowSelectionInterval(row, row)
+                        selected = True
+            if selected == False and self._log.size() > 0:
+                self.logTable.setRowSelectionInterval(0, 0)
+                self.loadVulnerability(self._log.get(0))
+        else:
+            xmlPath = projPath + "/" + nameVuln + "/vulnerability.xml"
+            document = self.getXMLDoc(xmlPath)
+            nodeList = document.getDocumentElement().getChildNodes()
+            vulnName = nodeList.item(0).getTextContent()
+            severity = nodeList.item(1).getTextContent()
+            description = nodeList.item(2).getTextContent()
+            mitigation = nodeList.item(3).getTextContent()
+            color = nodeList.item(4).getTextContent()
+            risk = nodeList.item(5).getTextContent()
+            cweTitle = nodeList.item(6).getTextContent()
+            cweNum = nodeList.item(7).getTextContent()
+            references = nodeList.item(8).getTextContent()
+            try:
+                owasp_class = nodeList.item(9).getTextContent()
+            except:
+                owasp_class = ''
+                pass
+
+            try:
+                affectedURL = nodeList.item(10).getTextContent()
+            except:
+                affectedURL = ''
+                pass
+            #print owasp_class
+            vulnObject = vulnerability(vulnName, severity, description, mitigation, color, risk, cweNum, cweTitle,
+                                       references, affectedURL, owasp_class)
+
+            self._lock.acquire()
+            row = self._log.size()
+            if justLoad_bool:
+                self.loadVulnerability(vulnObject, justLoad_bool)
+                self.popup("Go to Vulnerability Tab")
+            else:
                 self._log.add(vulnObject)
-                self.fireTableRowsInserted(row, row)
-                self._lock.release()
-                if vulnName == self.vulnName.getText():
-                    self.logTable.setRowSelectionInterval(row,row)
-                    selected = True
-        if selected == False and self._log.size() > 0:
-            self.logTable.setRowSelectionInterval(0, 0)
-            self.loadVulnerability(self._log.get(0))
-        self._backupLog = ArrayList(self._log)
-        
+            self.fireTableRowsInserted(row, row)
+            self._lock.release()
+            if vulnName == self.vulnName.getText():
+                self.logTable.setRowSelectionInterval(row, row)
+                selected = True
+
     def createSection(self, sectioName):
         self.config.read('config.ini')
         if not (sectioName in self.config.sections()):
@@ -424,7 +652,99 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         if n == JOptionPane.YES_OPTION:
             self.openFolderOrFile(path)
 
-    def exportProj(self,event):
+    def generateXMLReport(self):
+        try:
+            xml = None
+            nomeapp = self.projName.getText()
+            vetorDeVuln = self.get_vulns_to_xml_report()
+            tag_relatorio = ET.Element('relatorio')
+            tag_aplicacao = ET.SubElement(tag_relatorio, 'aplicacao')
+            tag_nomeapp = ET.SubElement(tag_aplicacao, 'nome')
+            tag_nomeapp.text = nomeapp.decode('latin1')
+            for vulnerabilidade in vetorDeVuln:
+                tag_vuln = ET.SubElement(tag_aplicacao, 'vulnerabilidade')
+                tag_cwenum = ET.SubElement(tag_vuln, 'cwe')
+                tag_cwenum.text = vulnerabilidade['cwe'].decode('latin1')
+                tag_nomevuln = ET.SubElement(tag_vuln, 'nome')
+                tag_nomevuln.text = vulnerabilidade['nome_vuln'].decode('latin1')
+                tag_severidade = ET.SubElement(tag_vuln, 'severidade')
+                tag_severidade.text = vulnerabilidade['severidade'].decode('latin1')
+                tag_owasp_class = ET.SubElement(tag_vuln, 'owasp_class')
+                tag_owasp_class.text = vulnerabilidade['owasp_class'].decode('latin1')
+                tag_urls = ET.SubElement(tag_vuln, 'urls')
+                for url in vulnerabilidade['url_afetada']:  # vetor
+                    tag_url = ET.SubElement(tag_urls, 'url')
+                    tag_url.text = url.decode('utf8')
+                tag_descricao = ET.SubElement(tag_vuln, 'descricao')
+                tag_descricao.text = vulnerabilidade['descricao']
+                tag_risco = ET.SubElement(tag_vuln, 'risco')
+                tag_risco.text = vulnerabilidade['risco']
+                tag_resultados = ET.SubElement(tag_vuln, 'resultados')
+                for imagem, texto in vulnerabilidade['resultados']:  # vetor de tuplas
+                    tag_imagem = ET.SubElement(tag_resultados, 'imagem')
+                    tag_imagem.text = imagem.lower()
+                    tag_textoimg = ET.SubElement(tag_resultados, 'texto')
+                    tag_textoimg.text = texto.lower()
+                tag_recomendacao = ET.SubElement(tag_vuln, 'recomendacao')
+                tag_recomendacao.text = vulnerabilidade['recomendacao']
+                tag_referencias = ET.SubElement(tag_vuln, 'referencias')
+                for links in vulnerabilidade['referencias']:  # vetor
+                    tag_referencia = ET.SubElement(tag_referencias, 'referencia')
+                    tag_referencia.text = links
+            # tree = ET.ElementTree(tag_relatorio)
+            # tree.write('xml_marotao.xml')
+
+            xmlstr = ET.tostring(tag_relatorio, method='xml')
+            xml = minidom.parseString(xmlstr)  # or xml.dom.minidom.parseString(xml_string)
+            xmlDirReport = self.getCurrentProjPath() + '/' + self.projName.getText().lower() + '.xml'
+            with codecs.open(xmlDirReport, 'w', 'utf8') as xml_file:
+                xml_file.write(xml.toprettyxml())
+            #print xml.toprettyxml()
+            return xmlDirReport
+        except:
+            self.popup('N�o gerou o XML')
+
+    def get_vulns_to_xml_report(self):
+        self.vetorVuln = []
+        for i in range(0, self._log.size()):
+            name = self._log.get(i).getName()
+            images = ""
+            img_and_text = []
+            try:
+                for fileName in os.listdir(self.projPath.getText() + "/" + self.clearStr(name)):
+                    if fileName.endswith(".jpg"):
+                        img_and_text.append((fileName, fileName)) #filename � a variavel que d� o nome a imagem
+            except Exception as e:
+                pass
+            description = u"%s"%self._log.get(i).getDescription()
+            mitigation = u"%s"%self._log.get(i).getMitigation()
+            risk = u"%s"%self._log.get(i).getRisk()
+            references = u"%s"%self._log.get(i).getReferences()
+            references = references.split('\n')
+            try:
+                references.remove('')
+            except:
+                pass
+            cweNum = u"%s"%str(self._log.get(i).getCWENumber())
+            affectedUrlList = [u"%s"%x for x in self._log.get(i).getAffectedURL().split()]
+            severity = {"Unclassified":u"informativa", "Critical":u"Cr�tica", "High":u"Alta", "Medium":u"M�dia", "Low":u"Baixa"}
+            owasp_class = u"%s"%str(self._log.get(i).getOwaspClass())
+            vulnDict = {'cwe': cweNum, 'nome_vuln': name,
+                        'severidade': severity[self._log.get(i).getSeverity()],
+                        'url_afetada': affectedUrlList, 'descricao': description,
+                        'risco':risk,
+                        'resultados': img_and_text,
+                        'recomendacao': mitigation,
+                        'referencias': references,
+                        'owasp_class': owasp_class}
+
+            # print vulnDict['descricao'].encode('utf8')
+            self.vetorVuln.append(vulnDict)
+            # print self.vetorVuln
+        return self.vetorVuln
+
+
+    def exportProj(self, event):
         self.chooser.setDialogTitle("Save project")
         Ffilter = FileNameExtensionFilter("Zip files", ["zip"])
         self.chooser.setFileFilter(Ffilter)
@@ -459,7 +779,15 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                 self.saveCfg()
                 self.reloadProjects()
                 self.currentProject.getModel().setSelectedItem(projName)
-                self.clearVulnerabilityTab() 
+                self.clearVulnerabilityTab()
+
+    def copy(self, src, dst):
+        if not os.path.exists(dst):
+            os.mkdir(dst)
+        toDirectory = dst
+        fromDirectory = src
+
+        copy_tree(fromDirectory, toDirectory)
 
     def reportToXLS(self):
         if not xlsxwriterImported:
@@ -482,8 +810,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             # add requests and images as well
         workbook.close()
         return self.getCurrentProjPath() + '/PT Manager Report.xlsx'
-        
+
     def reportToHTML(self):
+        """Generate the HTML report"""
         htmlContent = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="he" dir="ltr">
@@ -518,21 +847,21 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         }
 </style>
 <script language="javascript">
-    function divHideShow(divToHideOrShow) 
+    function divHideShow(divToHideOrShow)
     {
         var div = document.getElementById(divToHideOrShow);
 
-        if (div.style.display == "block") 
+        if (div.style.display == "block")
         {
             div.style.display = "none";
         }
-        else 
+        else
         {
             div.style.display = "block";
         }
 
-        
-    }         
+
+    }
 </script>
     </head>
 
@@ -543,57 +872,73 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 <h2> Project: %s</h1>
     """ % (self.projName.getText())
 
-        for i in range(0,self._log.size()):
+        for i in range(0, self._log.size()):
             name = self._log.get(i).getName()
-            requestPath = self.getVulnReqResPath("request",name) .replace("\\","\\\\")
+            requestPath = self.getVulnReqResPath("request", name).replace("\\", "\\\\")
             requestHTML = "No Request"
             if os.path.exists(requestPath):
-                requestHTML = """<input type="button" value="Load" onclick="document.getElementById('requestFrame%s').src = '%s'"/><br><br><iframe id="requestFrame%s" width="870" height="500"></iframe>""" % (i, requestPath, i)
-            responsePath = self.getVulnReqResPath("response",name).replace("\\","\\\\")
+                requestHTML = """<input type="button" value="Load" onclick="document.getElementById('requestFrame%s').src = '%s'"/><br><br><iframe id="requestFrame%s" width="870" height="500"></iframe>""" % (
+                i, requestPath, i)
+            responsePath = self.getVulnReqResPath("response", name).replace("\\", "\\\\")
             responseHTML = "No Response"
             if os.path.exists(responsePath):
-                responseHTML = """<input type="button" value="Load" onclick="document.getElementById('responseFrame%s').src = '%s'"/><br><br><iframe id="responseFrame%s" width="870" height="500"></iframe>""" % (i, responsePath, i)
+                responseHTML = """<input type="button" value="Load" onclick="document.getElementById('responseFrame%s').src = '%s'"/><br><br><iframe id="responseFrame%s" width="870" height="500"></iframe>""" % (
+                i, responsePath, i)
 
             images = ""
-            for fileName in os.listdir(self.projPath.getText()+"/"+self.clearStr(name)):
-                if fileName.endswith(".jpg"):
-                    images += "%s<br><img src=\"%s\"><br><br>" % (fileName, self.projPath.getText()+"/"+self.clearStr(name) + "/" + fileName)
-            description = self.newlineToBR(self._log.get(i).getDescription())
-            mitigation = self.newlineToBR(self._log.get(i).getMitigation())
-            htmlContent +=  self.convertVulntoTable(i,name,self._log.get(i).getSeverity(), description,mitigation, requestHTML, responseHTML, images)
+            try:
+                for fileName in os.listdir(self.projPath.getText() + "/" + self.clearStr(name)):
+                    if fileName.endswith(".jpg"):
+                        images += "%s<br><img src=\"%s\"><br><br>" % (
+                        fileName, self.projPath.getText() + "/" + self.clearStr(name) + "/" + fileName) #filename � a variavel que d� o nome a imagem
+            except Exception as e:
+                pass
+            description = self._log.get(i).getDescription()
+            description = self.newlineToBR(self.htmlEscape(description))
+            mitigation = self.newlineToBR(self.htmlEscape(self._log.get(i).getMitigation()))
+            risk = self.newlineToBR(self.htmlEscape(self._log.get(i).getRisk()))
+            references = self.newlineToBR(self.htmlEscape(self._log.get(i).getReferences()))
+            htmlContent += self.convertVulntoTable(i, name, self._log.get(i).getSeverity(), description,risk, mitigation,references,
+                                                   requestHTML, responseHTML, images)
+
+        #Wrap all the html content
         htmlContent += "<p align=\"right\">Developed by Barak Tawily</p></div></body></html>"
-        f = open(self.getCurrentProjPath() + '/PT Manager Report.html', 'w')
+        f = codecs.open(self.getCurrentProjPath() + '/PT Manager Report.html', 'w', 'utf8')
         f.writelines(htmlContent)
         f.close()
         return self.getCurrentProjPath() + '/PT Manager Report.html'
 
-    def newlineToBR(self,string):
-        return "<br />".join(string.split("\n"))
+    def newlineToBR(self, string):
+        return "<br>".join(string.split("\n"))
 
-    def getFileContent(self,path):
+    def getFileContent(self, path):
         f = open(path, "rb")
         content = f.read()
         f.close()
         return content
 
-    def convertVulntoTable(self, number, name, severity, description, mitigation, request = "None", response = "None", images = "None"):
+    def convertVulntoTable(self, number, name, severity, description,risk, mitigation, references, request="None", response="None",
+                           images="None"):
+        """Convert vulnerabilities into html table """
         name = self.htmlEscape(name)
-        description = self.htmlEscape(description)
-        mitigation = self.htmlEscape(mitigation)
-        return """<div style="width: 100%%;height: 30px;text-align: center;background-color:#E0E0E0;font-size: 17px;font-weight: bold;color: #000;padding-top: 10px;">%s <a href="javascript:divHideShow('Table_%s');" style="color:#191970">(OPEN / CLOSE)</a></div>
+        description = description
+        mitigation = mitigation
+        references = references
+
+        return u"""<div style="width: 100%%;height: 30px;text-align: center;background-color:#E0E0E0;font-size: 17px;font-weight: bold;color: #000;padding-top: 10px;">%s <a href="javascript:divHideShow('Table_%s');" style="color:#191970">(OPEN / CLOSE)</a></div>
         <div id="Table_%s" style="display: none;">
             <table width="100%%" cellspacing="0" cellpadding="0" style="margin: 0px auto;text-align: left;border-top: 0px;">
                 <tr>
                     <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Threat Level: </span> 
+                        <span style="color:#000000">Threat Level: </span>
                         <span style="color:#8b8989">%s</span>
                                             </td>
                                         </tr>
                                         <tr>
                                             <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Description</span> 
+                        <span style="color:#000000">Description</span>
                         <a href="javascript:divHideShow('Table_%s_Command_03');" style="color:#191970">OPEN / CLOSE >>></a>
                         </div>
 
@@ -605,7 +950,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                                         <tr>
                                             <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Mitigration</span> 
+                        <span style="color:#000000">Risk</span>
                         <a href="javascript:divHideShow('Table_%s_Command_04');" style="color:#191970">OPEN / CLOSE >>></a>
                         </div>
 
@@ -618,7 +963,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                                         <tr>
                                             <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Request</span> 
+                        <span style="color:#000000">Mitigation</span>
                         <a href="javascript:divHideShow('Table_%s_Command_05');" style="color:#191970">OPEN / CLOSE >>></a>
                         </div>
 
@@ -627,16 +972,42 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                         <b>
                                             </td>
                                         </tr>
+                        <tr>
+                        <td>
+                        <div style="font-size: 16px;font-weight: bold;">
+                        <span style="color:#000000">References</span>
+                        <a href="javascript:divHideShow('Table_%s_Command_06');" style="color:#191970">OPEN / CLOSE >>></a>
+                        </div>
+
+                        <div id="Table_%s_Command_06" style="display: none;margin-top: 25px;">
+                        %s
+                        <b>
+
+                        </td>
+                        </tr>
+                                        <tr>
+                                            <td>
+                        <div style="font-size: 16px;font-weight: bold;">
+                        <span style="color:#000000">Request</span>
+                        <a href="javascript:divHideShow('Table_%s_Command_07');" style="color:#191970">OPEN / CLOSE >>></a>
+                        </div>
+
+                        <div id="Table_%s_Command_07" style="display: none;margin-top: 25px;">
+                        %s
+                        <b>
+                                            </td>
+                                        </tr>
+
 
 
                                                         <tr>
                                             <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Response</span> 
-                        <a href="javascript:divHideShow('Table_%s_Command_06');" style="color:#191970">OPEN / CLOSE >>></a>
+                        <span style="color:#000000">Response</span>
+                        <a href="javascript:divHideShow('Table_%s_Command_08');" style="color:#191970">OPEN / CLOSE >>></a>
                         </div>
 
-                        <div id="Table_%s_Command_06" style="display: none;margin-top: 25px;">
+                        <div id="Table_%s_Command_08" style="display: none;margin-top: 25px;">
                         %s
                         <b>
                                             </td>
@@ -645,17 +1016,19 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
                                                         <tr>
                                             <td>
                         <div style="font-size: 16px;font-weight: bold;">
-                        <span style="color:#000000">Images</span> 
-                        <a href="javascript:divHideShow('Table_%s_Command_07');" style="color:#191970">OPEN / CLOSE >>></a>
+                        <span style="color:#000000">Images</span>
+                        <a href="javascript:divHideShow('Table_%s_Command_09');" style="color:#191970">OPEN / CLOSE >>></a>
                         </div>
 
-                        <div id="Table_%s_Command_07" style="display: none;margin-top: 25px;">
+                        <div id="Table_%s_Command_09" style="display: none;margin-top: 25px;">
                         %s
                         <b>
                     </td>
                 </tr>
             </table>
-        </div><br><br>""" % (name,number,number,severity,number,number,description,number,number,mitigation,number,number,request,number,number,response,number,number,images)
+        </div><br><br>"""% (
+        name, number, number, severity, number, number, description, number, number, risk, number , number ,mitigation,number, number, references, number, number,
+        request, number, number, response, number, number, images)
 
     def clearVulnerabilityTab(self, rmVuln=True):
         if rmVuln:
@@ -664,6 +1037,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.mitigationStr.setText("")
         self.colorCombo.setSelectedIndex(0)
         self.threatLevel.setSelectedIndex(0)
+        self.owaspClassCombo.setSelectedIndex(0)
+        self.cweTitleStr.setText("")
+        self.cweNumberStr.setText("CWE-")
+        self.refStr.setText("")
+        self.riskStr.setText("")
+        self.getAffectedUrlStr.setText("")
         self.screenshotsList.clear()
         self.addButton.setText("Add")
         self.firstPic.setIcon(None)
@@ -694,8 +1073,9 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
     def getVulnReqResPath(self, requestOrResponse, vulnName):
         return self.getCurrentProjPath() + "/" + self.clearStr(vulnName) + "/"+requestOrResponse+"_" + self.clearStr(vulnName)
 
-    def htmlEscape(self,data):
-        return data.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+    def htmlEscape(self, data):
+        """Do the escape of HTML characters to insert into HTML report"""
+        return cgi.escape(data,quote=True)
 
     def generateReportFromDocxTemplate(self, zipname, newZipName, filename):      
         newZipName = self.getCurrentProjPath() + "/" + newZipName
@@ -732,34 +1112,99 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.chooser.setDialogTitle("Select target directory")
         self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
         returnVal = self.chooser.showOpenDialog(None)
+
         if returnVal == JFileChooser.APPROVE_OPTION:
-            projPath = str(self.chooser.getSelectedFile()) + "/PTManager"
-            if not os.path.exists(projPath):
-                os.makedirs(projPath)
+            try:
+                testeDir = u"%s" % self.chooser.getSelectedFile().getAbsolutePath()
+                projPath = testeDir.encode('latin1') + "/%s"%self.projName.getText()+ "/PTManager"
+                if not os.path.exists(projPath):
+                    os.makedirs(projPath)
+                else:
+                    self.popup("Error: PTManager folder already exists, please choose other folder")
+                self.projPath.setText(projPath)
+            except Exception as e:
+                # print str(e)
+                if "decode" in str(e) or "encode" in str(e):
+                    stringError = u"Verifique se a acentua��o no seu diret�rio".encode('latin1')
+                    self.popup(stringError)
+                else:
+                    self.popup("Ocorreu um erro:\n" + str(e))
+
+    def loadVulnPath(self):
+        try:
+            vulnDirPath = u"%s"%self.config.get('vulnerability path','vulnDirPath')
+            vulnDirPath = vulnDirPath.encode('utf8')
+            self.vulnsPathLabel.setText(vulnDirPath)
+            self.vulnsInDirList.removeAllItems();
+            self.vulnsPathLabel.setText(vulnDirPath)
+            self.loadVulnsIntoComboBox(vulnDirPath)
+        except:
+            pass
+
+
+    def chooseVulnsPath(self, event):
+        self.vulnsInDirList.removeAllItems();
+        self.chooser.setDialogTitle("Select target directory")
+        self.chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY)
+        returnVal = self.chooser.showOpenDialog(None) 
+        if returnVal == JFileChooser.APPROVE_OPTION:
+            testeDir = u"%s"%self.chooser.getSelectedFile().getAbsolutePath()
+            vulnsPath = testeDir.encode('latin1') + "/Vulns"
+            if not os.path.exists(vulnsPath) and "Vulns" not in vulnsPath:
+                os.makedirs(vulnsPath)
             else:
-                self.popup("Error: PTManager folder already exists, please choose other folder")
-            self.projPath.setText(projPath)
+                self.popup("Directory Already Exists")
+            self.config.set('vulnerability path', 'vulnDirPath', vulnsPath)
+            self.saveCfg()
+            self.vulnsPathLabel.setText(vulnsPath)
+            self.loadVulnsIntoComboBox(vulnsPath)
+
+    def loadVulnsIntoComboBox(self, vulnsPath):
+        plat = platform.platform()
+        vulnsInDir = os.walk(vulnsPath)
+        vulnsComboBox = []
+        n = 0
+        boolWin = False
+        if "on-Windows" in plat:
+            boolWin = True
+
+        for itens in vulnsInDir:
+            if n == 0:
+                pass
+                n += 1
+            else:
+                if boolWin:
+                    vulnsComboBox.append(itens[0].replace("/","\\").split("\\")[-1])
+                else:
+                    vulnsComboBox.append(itens[0].replace("\\", "/").split("/")[-1])
+
+        vulnsComboBox.sort()
+
+        for item in vulnsComboBox:
+            self.vulnsInDirList.addItem(item)
 
     def reloadProjects(self):
         self.currentProject.setModel(DefaultComboBoxModel(self.config.options('projects')))
 
-    def rmProj(self, event): #uncomment the following comments in the function if you would like to remove the directory - insecure
+    def rmProj(self,
+               event):  # uncomment the following comments in the function if you would like to remove the directory - insecure
         # projPath = self.projPath.getText()
         # if not os.path.exists(projPath+"/project.xml"):
         #     self.popup("project.xml not found, cant delete the directory")
         #     return
         # if self.popUpAreYouSure("Are you sure you want to delete the following directory path? (including it's content sub directories and files)\n%s" % (projPath)) == JOptionPane.YES_OPTION:
-        if self.popUpAreYouSure("Are you sure you want to delete this project from the config file?\nNote: it will not be removed from the directory on your file system.") == JOptionPane.YES_OPTION:
+        if self.popUpAreYouSure(
+                "Are you sure you want to delete this project from the config file?\nNote: it will not be removed from the directory on your file system.") == JOptionPane.YES_OPTION:
             self._requestViewer.setMessage("None", False)
             self._responseViewer.setMessage("None", False)
             # shutil.rmtree(projPath)
-            self.config.remove_option('projects',self.currentProject.getSelectedItem())
+            self.config.remove_option('projects', self.currentProject.getSelectedItem())
             self.reloadProjects()
             self.currentProject.setSelectedIndex(0)
             self.loadVulnerabilities(self.projPath.getText())
 
-    def popup(self,msg):
-        JOptionPane.showMessageDialog(None,msg)
+    def popup(self, msg):
+        JOptionPane.showMessageDialog(None, msg)
 
     def addProj(self, event):
         projPath = self.projPath.getText()
@@ -773,21 +1218,30 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         path = ET.SubElement(xml, "path")
         details = ET.SubElement(xml, "details")
         autoSaveMode = ET.SubElement(xml, "autoSaveMode")
+        start = ET.SubElement(xml, "start")
 
         name.text = self.projName.getText()
         path.text = projPath
         details.text = self.projDetails.getText()
         autoSaveMode.text = str(self.autoSave.isSelected())
+        if os.path.exists(self.getCurrentProjPath() + '/project.xml'):
+            document = self.getXMLDoc(self.getCurrentProjPath() + "/project.xml")
+            nodeList = document.getDocumentElement().getChildNodes()
+            start_str = str(nodeList.item(4).getTextContent())
+            start.text = start_str
+        else:
+            start.text = time.strftime("%d/%m/%Y")
+	    self.clearVulnerabilityTab()
+	    self.clearList(None)
+
         tree = ET.ElementTree(xml)
         try:
-            tree.write(self.getCurrentProjPath()+'/project.xml')
+            tree.write(self.getCurrentProjPath() + '/project.xml')
         except:
             self.popup("Invalid path")
             return
 
         self.reloadProjects()
-        self.clearVulnerabilityTab()
-        self.clearList(None)
         self.currentProject.getModel().setSelectedItem(self.projName.getText())
 
     def resize(self, image, width, height):
@@ -799,10 +1253,12 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         return bi;
 
     def clearStr(self, var):
-        return var.replace(" " , "_").replace("\\" , "").replace("/" , "").replace(":" , "").replace("*" , "").replace("?" , "").replace("\"" , "").replace("<" , "").replace(">" , "").replace("|" , "").replace("(" , "").replace(")" , "")
+        return var.replace(" ", "_").replace("\\", "").replace("/", "").replace(":", "").replace("*", "").replace("?",
+                                                                                                                  "").replace(
+            "\"", "").replace("<", "").replace(">", "").replace("|", "").replace("(", "").replace(")", "")
 
-    def popUpAreYouSure(self, msg = "Are you sure?"):
-        dialogResult = JOptionPane.showConfirmDialog(None,msg,"Warning",JOptionPane.YES_NO_OPTION)
+    def popUpAreYouSure(self, msg="Are you sure?"):
+        dialogResult = JOptionPane.showConfirmDialog(None, msg, "Warning", JOptionPane.YES_NO_OPTION)
         if dialogResult == 0:
             return 0
         return 1
@@ -843,8 +1299,8 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         vulnPath = self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText())
         if not os.path.exists(vulnPath):
             os.makedirs(vulnPath)
-        name = self.clearStr(self.vulnName.getText()) + str(random.randint(1, 99999))+".jpg"
-        fileName = self.projPath.getText()+"/"+ self.clearStr(self.vulnName.getText()) + "/" + name
+        name = self.clearStr(self.vulnName.getText()) + str(time.strftime("%H%M%S")) + ".jpg"
+        fileName = self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText()) + "/" + name.lower()
         file = File(fileName)
         bufferedImage = BufferedImage(image.getWidth(None), image.getHeight(None), BufferedImage.TYPE_INT_RGB);
         g = bufferedImage.createGraphics();
@@ -861,15 +1317,27 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             self.clearVulnerabilityTab()
             self.loadVulnerabilities(self.getCurrentProjPath())
 
-    def addVuln(self, event):
-        posIndex = self.descriptionString.getCaretPosition();
+    def addVulnToRepo(self, event):
+        self.addVulnBurp(boolRepo=True)
+        self.vulnsInDirList.removeAllItems();
+        vulnsPath = self.vulnsPathLabel.getText()
+        self.loadVulnsIntoComboBox(vulnsPath)
+
+
+    def addVuln(self,event):
+        self.addVulnBurp()
+
+
+    def addVulnBurp(self, boolRepo = False):
+        #print boolRepo
         newName = self.vulnName.getText()
-        if self.addButton.getText() != "Add":
+        if self.addButton.getText() != "Add" and not boolRepo:
             row = self.logTable.getSelectedRow()
-            old = self.logTable.getValueAt(row,1)
+            old = self.logTable.getValueAt(row, 1)
             if newName != old:
-                if self.popUpAreYouSure("Are you sure you want to change the vulnerability name?") == JOptionPane.YES_OPTION:
-                    self.changeVulnName(newName,old)
+                if self.popUpAreYouSure(
+                        "Are you sure you want to change the vulnerability name?") == JOptionPane.YES_OPTION:
+                    self.changeVulnName(newName, old)
                 else:
                     self.vulnName.setText(old)
                     return
@@ -879,14 +1347,21 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
             colorTxt = self.colorCombo.getSelectedItem()
         self._lock.acquire()
         row = self._log.size()
-        vulnObject = vulnerability(self.vulnName.getText(),self.threatLevel.getSelectedItem(),self.descriptionString.getText(),self.mitigationStr.getText() ,colorTxt)
-        self._log.add(vulnObject)
-        self.fireTableRowsInserted(row, row)
+        vulnObject = vulnerability(self.vulnName.getText(), self.threatLevel.getSelectedItem(),
+                                   self.descriptionString.getText(), self.mitigationStr.getText(), colorTxt, self.riskStr.getText(),self.cweNumberStr.getText(), self.cweTitleStr.getText(),self.refStr.getText(),self.getAffectedUrlStr.getText(), self.owaspClassCombo.getSelectedItem())
+        if not boolRepo:
+            self._log.add(vulnObject)
+            self.fireTableRowsInserted(row, row)
         self._lock.release()
 
         vulnPath = self.projPath.getText() + "/" + self.clearStr(self.vulnName.getText())
-        if not os.path.exists(vulnPath):
+        vulnDirPath = self.vulnsPathLabel.getText() + "/" + self.clearStr(self.vulnName.getText())
+        #print vulnDirPath
+        if not os.path.exists(vulnPath) and not boolRepo:
             os.makedirs(vulnPath)
+        if not os.path.exists(vulnDirPath):
+            #print "faz dir"
+            os.makedirs(vulnDirPath)
 
         xml = ET.Element('vulnerability')
         name = ET.SubElement(xml, "name")
@@ -894,13 +1369,46 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         description = ET.SubElement(xml, "description")
         mitigation = ET.SubElement(xml, "mitigation")
         color = ET.SubElement(xml, "color")
+        risk = ET.SubElement(xml, "risk")
+        cweTitle = ET.SubElement(xml,"cweTiTle")
+        cweNum = ET.SubElement(xml,"cweNum")
+        references = ET.SubElement(xml,"references")
+        owasp_class = ET.SubElement(xml, "owasp_class")
+        if not boolRepo:
+            affectedURL = ET.SubElement(xml, "affectedURLS")
+            affectedURL.text = self.getAffectedUrlStr.getText()
         name.text = self.vulnName.getText()
         severity.text = self.threatLevel.getSelectedItem()
+        owasp_class.text = self.owaspClassCombo.getSelectedItem()
         description.text = self.descriptionString.getText()
         mitigation.text = self.mitigationStr.getText()
+        risk.text = self.riskStr.getText()
+        cweTitle.text = self.cweTitleStr.getText()
+        cweNum.text = self.cweNumberStr.getText()
+        references.text = self.refStr.getText()
         color.text = colorTxt
         tree = ET.ElementTree(xml)
-        tree.write(vulnPath+'/vulnerability.xml')
+        n = None
+        if boolRepo is False:
+            tree.write(vulnPath + '/vulnerability.xml')
+        elif os.path.exists(vulnDirPath) and not os.path.exists(vulnDirPath + '/vulnerability.xml'):
+            tree.write(vulnDirPath + '/vulnerability.xml')
+        elif os.path.exists(vulnDirPath + '/vulnerability.xml'):
+            n = JOptionPane.showConfirmDialog(None,
+                                              "This Vulnerability has been already added. Do you want to update it ?","EGV Manager", JOptionPane.YES_NO_OPTION)
+            if n == JOptionPane.YES_OPTION:
+                tree.write(vulnDirPath + '/vulnerability.xml')
+        if boolRepo and n == JOptionPane.YES_OPTION:
+            self.popup("Vulnerability Updated")
+            self.loadVulnerabilities(self.getCurrentProjPath())
+            pass
+        elif boolRepo:
+            #print "teste"
+            self.popup("Vulnerability created")
+            pass
+        else:
+            self.loadVulnerabilities(self.getCurrentProjPath())
+            self.loadVulnerability(vulnObject)
 
         self.searchTerm = ""
         self.changeTableColumnName(1,"Vulnerability Name")
@@ -998,7 +1506,7 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
 
         return ""
 
-    def changeCurrentVuln(self,value,fieldNumber, xmlPath = "def"):
+    def changeCurrentVuln(self, value, fieldNumber, xmlPath="def"):
         if xmlPath == "def":
             xmlPath = self.getCurrentVulnPath() + "/vulnerability.xml"
         document = self.getXMLDoc(xmlPath)
@@ -1007,43 +1515,53 @@ class BurpExtender(IBurpExtender, ITab, IMessageEditorController, AbstractTableM
         self.saveXMLDoc(document, xmlPath)
         self.loadVulnerabilities(self.getCurrentProjPath())
 
-    def loadVulnerability(self, vulnObject):
+    def loadVulnerability(self, vulnObject, justLoadbool = False):
         self.addButton.setText("Update")
         self.vulnName.setText(vulnObject.getName())
         self.threatLevel.setSelectedItem(vulnObject.getSeverity())
         self.descriptionString.setText(vulnObject.getDescription())
         self.mitigationStr.setText(vulnObject.getMitigation())
+        self.cweTitleStr.setText(vulnObject.getCWETitle())
+        self.cweNumberStr.setText(vulnObject.getCWENumber())
+        self.riskStr.setText(vulnObject.getRisk())
+        self.refStr.setText(vulnObject.getReferences())
+        self.getAffectedUrlStr.setText(vulnObject.getAffectedURL())
+        #print vulnObject.getOwaspClass()
+        if vulnObject.getOwaspClass() == "" or vulnObject.getOwaspClass() == None:
+            self.owaspClassCombo.setSelectedItem("OWASP:")
+        else:
+            self.owaspClassCombo.setSelectedItem(vulnObject.getOwaspClass())
 
         if vulnObject.getColor() == "" or vulnObject.getColor() == None:
             self.colorCombo.setSelectedItem("Color:")
         else:
             self.colorCombo.setSelectedItem(vulnObject.getColor())
         self.screenshotsList.clear()
+        if not justLoadbool:
+            for fileName in os.listdir(self.projPath.getText() + "/" + self.clearStr(vulnObject.getName())) :
+                if fileName.endswith(".jpg"):
+                    self.screenshotsList.addElement(fileName)
+                    imgPath = self.projPath.getText() + "/" + self.clearStr(vulnObject.getName()) + '/' + fileName
+                    self.loadSS(imgPath)
 
-        for fileName in os.listdir(self.projPath.getText()+"/"+self.clearStr(vulnObject.getName())):
-            if fileName.endswith(".jpg"):
-                self.screenshotsList.addElement(fileName)
-                imgPath = self.projPath.getText()+"/"+self.clearStr(vulnObject.getName())+'/'+fileName
-                self.loadSS(imgPath)
+            if (self.screenshotsList.getSize() == 0):
+                self.firstPic.setIcon(None)
+            else:
+                self.ssList.setSelectedIndex(0)
 
-        if (self.screenshotsList.getSize() == 0):
-            self.firstPic.setIcon(None)
-        else:
-            self.ssList.setSelectedIndex(0)
+            path = self.getVulnReqResPath("request", vulnObject.getName())
+            if os.path.exists(path):
+                f = self.getFileContent(path)
+                self._requestViewer.setMessage(f, False)
+            else:
+                self._requestViewer.setMessage("None", False)
 
-        path = self.getVulnReqResPath("request",vulnObject.getName())
-        if os.path.exists(path):
-            f = self.getFileContent(path)
-            self._requestViewer.setMessage(f, False)
-        else:
-            self._requestViewer.setMessage("None", False)
-        
-        path = self.getVulnReqResPath("response",vulnObject.getName())
-        if os.path.exists(path):
-            f = self.getFileContent(path)
-            self._responseViewer.setMessage(f, False)
-        else:
-            self._responseViewer.setMessage("None", False)
+            path = self.getVulnReqResPath("response", vulnObject.getName())
+            if os.path.exists(path):
+                f = self.getFileContent(path)
+                self._responseViewer.setMessage(f, False)
+            else:
+                self._responseViewer.setMessage("None", False)
 
     def loadProject(self, projXMLPath):
         self.changeTableColumnName(1, "Vulnerability Name")
@@ -1158,7 +1676,10 @@ class ssChangedHandler(ListSelectionListener):
 
     def valueChanged(self, e):
         if self._extender.ssList.getSelectedValue() != None:
-            self._extender.loadSS(self._extender.projPath.getText()+'/'+self._extender.clearStr(self._extender.vulnName.getText()) + "/" + self._extender.clearStr(self._extender.ssList.getSelectedValue()))
+            self._extender.loadSS(self._extender.projPath.getText() + '/' + self._extender.clearStr(
+                self._extender.vulnName.getText()) + "/" + self._extender.clearStr(
+                self._extender.ssList.getSelectedValue()))
+
 
 class projTextChanged(DocumentListener):
     def __init__(self, extender):
@@ -1188,12 +1709,20 @@ class projectChangeHandler(ActionListener):
         self._extender.loadProject(xmlPath)
         
 class vulnerability():
-    def __init__(self,name,severity,description,mitigation,color):
+    def __init__(self, name, severity, description, mitigation, color, risk, cweNum, cweTitle, refs, url=None, owasp_class=None):
         self.name = name
         self.severity = severity
         self.description = description
         self.mitigation = mitigation
         self.color = color
+        self.risk = risk
+        self.cweNum = cweNum
+        self.cweTitle = cweTitle
+        self.refs = refs
+        self.url = url
+        self.owasp_class = owasp_class
+
+
 
     def getName(self):
         return self.name
@@ -1210,6 +1739,24 @@ class vulnerability():
     def getColor(self):
         return self.color
 
+    def getRisk(self):
+        return self.risk
+
+    def getCWETitle(self):
+        return self.cweTitle
+
+    def getCWENumber(self):
+        return self.cweNum
+
+    def getReferences(self):
+        return self.refs
+
+    def getAffectedURL(self):
+        return self.url
+
+    def getOwaspClass(self):
+        return self.owasp_class
+
 class handleMenuItems(ActionListener):
     def __init__(self, extender, messageInfo, menuName):
         self._extender = extender
@@ -1219,7 +1766,7 @@ class handleMenuItems(ActionListener):
     def actionPerformed(self, e):
 
         vulns = []
-        for i in range(0,self._extender._log.size()):
+        for i in range(0, self._extender._log.size()):
             vulns.append(self._extender._log.get(i).getName())
 
         vulnName = self._extender.vulnName.getText()
